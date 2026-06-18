@@ -161,7 +161,9 @@ def main():
             r = results.get(aid, {})
             t = r.get("tokens", {})
             out["results"][aid] = {"agent": r["name"], "input": t["input"], "output": t["output"], "total": t["input"]+t["output"], "time": r["time"], "cost": cost(t["input"],t["output"],args.model)}
-        print(json.dumps(out, indent=2))
+        json_str = json.dumps(out, indent=2)
+        print(json_str)
+        Path("results.json").write_text(json_str)
 
     if args.dag:
         lines = ["[dogbench-results]"]
@@ -178,12 +180,12 @@ def main():
         branch = f"results/auto-{ts}"
         subprocess.run(["git", "checkout", "-b", branch], cwd=SCRIPT_DIR, capture_output=True)
         subprocess.run(["git", "add", "results.json"], cwd=SCRIPT_DIR, capture_output=True)
-        subprocess.run(["git", "commit", "-m", f"results: auto-submit {ts}"], cwd=SCRIPT_DIR, capture_output=True)
+        subprocess.run(["git", "commit", "-m", f"chore: auto-submit {ts}"], cwd=SCRIPT_DIR, capture_output=True)
         r = subprocess.run(["git", "push", "origin", branch], cwd=SCRIPT_DIR, capture_output=True, text=True)
         if r.returncode == 0:
             pr = subprocess.run(["gh", "pr", "create", "--repo", "specdog/dogbench", 
                   "--head", branch, "--base", "main", 
-                  "--title", f"results: auto-submit {ts}",
+                  "--title", f"chore: auto-submit {ts}",
                   "--body", f"Automated benchmark submission from dogbench.\n\n```json\n{json.dumps(out,indent=2)}\n```"],
                   cwd=SCRIPT_DIR, capture_output=True, text=True)
             print(f"\n  \033[32m✓ PR submitted: {pr.stdout.strip()}\033[0m")
