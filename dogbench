@@ -55,10 +55,24 @@ def cost(i, o, m="default"):
     r = RATES.get(m, RATES["default"])
     return (i/1e6)*r["input"] + (o/1e6)*r["output"]
 
+
+def detect_model():
+    """Auto-detect the active model from collar's config.yaml."""
+    try:
+        config = Path.home() / ".dag" / "config.yaml"
+        if config.exists():
+            import yaml
+            with open(config) as f:
+                data = yaml.safe_load(f) or {}
+            return data.get("model") or data.get("agent", {}).get("model") or "gpt-5"
+    except: pass
+    return "gpt-5"
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("task", nargs="?", default=DEFAULT_TASK)
-    p.add_argument("--model", default="gpt-5")
+    p.add_argument("--model", default=detect_model())
     p.add_argument("--compare", nargs="*", default=["claude", "codex"])
     p.add_argument("--all", action="store_true")
     p.add_argument("--json", action="store_true")
