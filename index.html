@@ -34,7 +34,7 @@
 <p id="loading">Loading latest results…</p>
 
 <h2>Run on Your Machine</h2>
-<pre><code id="install-cmd">cd ~/dogbench && git pull && ~/collar/.venv/bin/pip install -e . && ./dogbench --all --json</code></pre>
+<pre><code id="install-cmd">cd ~/dogbench && git pull origin feat/init && ~/collar/.venv/bin/pip install -e . && ./dogbench --all --json</code></pre>
 <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('install-cmd').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000)">📋 Copy</button>
 <p>Detects collar, Claude Code, and Codex automatically. Works with any model.</p>
 
