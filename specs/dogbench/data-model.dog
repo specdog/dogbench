@@ -1,4 +1,30 @@
-# Data Model
+# Project
 
-## Entities
+## entity: Agent
+  id: string
+  command: string
+  log_type: jsonl | collar_session
+  log_path: string
 
+## entity: Benchmark
+  task: string
+  model: string
+  agents: [Agent]
+
+## entity: Result
+  agent_id: string
+  input_tokens: int
+  output_tokens: int
+  wall_time_s: float
+  cost_usd: float
+
+## Cost Models ($/1M tokens)
+  deepseek-v4-pro:  { input: 0.50, output: 2.00 }
+  gpt-5:            { input: 1.25, output: 10.00 }
+  claude-sonnet-4:  { input: 3.00, output: 15.00 }
+  gemini-2.5-flash: { input: 0.15, output: 0.60 }
+
+## Savings Calculation
+  delta_tokens = baseline.total_tokens - collar.total_tokens
+  delta_pct = (delta_tokens / baseline.total_tokens) * 100
+  delta_cost = baseline.cost_usd - collar.cost_usd

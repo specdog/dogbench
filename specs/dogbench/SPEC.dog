@@ -1,4 +1,8 @@
-# Project
-
-## Product
-
+[dogbench]
+Agent→ ID:string(11), Command:string(11), LogType:jsonl(11), LogPath:string(11)
+Benchmark→ Task:string(11), Model:string(11), Agents:list(11)
+Result→ Input:int(11), Output:int(11), WallTime:float(11), Cost:float(11)
+Flow→ Detect→Run→Collect→Compare→Output(11)
+Output→ Text:table(11), JSON:machine(11), DAG:native(11)
+Cost→ DeepSeek:0.50/2.00(11), GPT5:1.25/10.00(11), Claude:3.00/15.00(11)
+Savings→ Delta:subtract(11), Percent:divide(11), Money:multiply(11)

@@ -1,0 +1,3 @@
+[dogbench]
+Principle→ Neutral:always(11), Real:logs(11), Open:source(11)
+Rule→ NoEstimate:ever(11), OwnMachine:always(11), OfficialData:only(11)

@@ -40,9 +40,37 @@ Requires: collar, and optionally Claude Code / Codex CLI for comparison.
 dogbench                          # quick benchmark (built-in task)
 dogbench "your custom task"       # custom prompt
 dogbench --all                    # compare all installed agents
-dogbench --compare hermes         # compare against Hermes upstream
 dogbench --model deepseek-v4-pro  # use a specific model
+dogbench --json                   # machine-readable JSON output
+dogbench --dag                    # .dag output (collar native)
 ```
+
+## Comparison Scenarios
+
+```bash
+# Same harness, different engines — proves DAG savings are architectural
+dogbench --compare claude --model gpt-5
+dogbench --compare codex --model gpt-5
+
+# Same engine, different harnesses — raw collar vs raw Claude Code
+dogbench --compare claude codex --model claude-sonnet-4
+
+# Collar + DeepSeek vs Collar + Codex (same harness, different backends)
+collar chat -q "your task" --model deepseek-v4-pro
+mv ~/.dag/sessions/ ~/.dag/sessions_backup
+collar chat -q "your task" --model gpt-5
+# Compare the two session directories
+```
+
+## Output Formats
+
+| Flag | Format | Use |
+|------|--------|-----|
+| (none) | Text table | Human readable |
+| `--json` | JSON | CI/CD, scripts |
+| `--dag` | .dag file | Collar native reading |
+
+JSON output includes per-agent token counts, wall time, and cost in USD.
 
 ## How It Works
 
