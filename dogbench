@@ -110,6 +110,7 @@ def main():
     p.add_argument("--compare", nargs="*", default=["claude", "codex"],
                    help="Agents to compare against (default: claude codex)")
     p.add_argument("--all", action="store_true", help="Compare against all available agents")
+    p.add_argument("--json", action="store_true", help="Machine-readable JSON output")
     args = p.parse_args()
 
     available = detect_installed()
@@ -184,7 +185,37 @@ def main():
     print("  └──────────────────────┴──────────┴───────────┴──────────┘")
     print()
 
-    # Savings summary
+    # JSON mode: output machine-readable telemetry
+    if args.json:
+        import sys
+        out = {"model": args.model, "results": {}}
+        for aid in targets:
+            r = results.get(aid, {})
+            tok = r.get("tokens", {})
+            out["results"][aid] = {
+                "agent": r.get("name", aid),
+                "input_tokens": tok.get("input", 0),
+                "output_tokens": tok.get("output", 0),
+                "total_tokens": tok.get("input", 0) + tok.get("output", 0),
+                "wall_time_s": r.get("time", 0),
+                "cost_usd": cost(tok.get("input", 0), tok.get("output", 0), args.model),
+                "error": r.get("error"),
+            }
+        # Add savings vs baseline
+        collar_data = out["results"].get("collar", {})
+        if collar_data.get("total_tokens", 0):
+            for aid in out["results"]:
+                if aid == "collar":
+                    continue
+                other = out["results"][aid]
+                if other.get("total_tokens", 0):
+                    saved = other["total_tokens"] - collar_data["total_tokens"]
+                    other["savings_tokens"] = saved
+                    other["savings_pct"] = round((saved / other["total_tokens"]) * 100, 1)
+        print(json.dumps(out, indent=2))
+        return
+
+    # Savings summary (text mode)
     if collar_total > 0:
         for aid in targets[1:]:
             r = results.get(aid, {})
