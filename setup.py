@@ -5,5 +5,5 @@ setup(
     packages=find_packages(),
     py_modules=["telemetry"],
     scripts=["dogbench"],
-    install_requires=["pyyaml"],
+    install_requires=["pyyaml", "dotdog"],
 )
