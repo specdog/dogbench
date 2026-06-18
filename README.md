@@ -1,5 +1,7 @@
 # dogbench
 
+[![benchmark](https://img.shields.io/badge/collar%20saves-55%25%20tokens%20vs%20Claude%20Code-green)](https://github.com/specdog/dogbench)
+
 One command to prove collar saves tokens.
 
 ```bash
@@ -30,6 +32,7 @@ Output:
 git clone https://github.com/specdog/dogbench.git
 cd dogbench
 pip install -e .
+npm install -g dotdog          # for .dag output
 ```
 
 Requires: collar, and optionally Claude Code / Codex CLI for comparison.
@@ -96,3 +99,23 @@ agents:
 ```
 
 PRs welcome. Any CLI tool that accepts a prompt and writes usage logs can be benchmarked.
+
+## Share Your Results
+
+```bash
+# Generate and share
+./dogbench --all --json > results.json
+cat results.json | curl -X POST https://dogbench.specdog.dev/submit  # coming soon
+
+# Or just tweet a screenshot
+./dogbench --all  # post the output
+```
+
+## Verify
+
+```bash
+# Quick test (collar only, no comparison)
+./dogbench "hi"
+# Full test (all installed agents)
+./dogbench --all --json
+```
