@@ -12,7 +12,7 @@ AGENTS = {
     "codex":  {"name": "OpenAI Codex", "cmd": 'codex exec "{prompt}"', "color": "\033[35m"},
 }
 
-RATES = {"gpt-5": {"input": 1.25, "output": 10.0}, "claude": {"input": 3.0, "output": 15.0}, "default": {"input": 1.0, "output": 5.0}}
+RATES = {"deepseek-v4-pro": {"input": 0.50, "output": 2.00}, "gpt-5": {"input": 1.25, "output": 10.0}, "claude": {"input": 3.0, "output": 15.0}, "default": {"input": 1.0, "output": 5.0}}
 
 def detect():
     return [a for a, c in AGENTS.items() if subprocess.run(["which", c["cmd"].split()[0]], capture_output=True).returncode == 0]
@@ -64,9 +64,13 @@ def detect_model():
             import yaml
             with open(config) as f:
                 data = yaml.safe_load(f) or {}
-            return data.get("model") or data.get("agent", {}).get("model") or "gpt-5"
+            m = data.get("model")
+            if isinstance(m, dict):
+                return m.get("default", "deepseek-v4-pro")
+            if isinstance(m, str) and m:
+                return m
     except: pass
-    return "gpt-5"
+    return "deepseek-v4-pro"
 
 
 def main():
