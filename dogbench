@@ -156,11 +156,17 @@ def main():
                     print(f"    \033[1;32m${cost(cd.get('input',0),cd.get('output',0),args.model) - cost(r['tokens'].get('input',0),r['tokens'].get('output',0),args.model):.4f}\033[0m saved\n")
 
     if args.json:
-        out = {"model": args.model, "results": {}}
+        agents = []
+        collar_total = 0
         for aid in targets:
             r = results.get(aid, {})
             t = r.get("tokens", {})
-            out["results"][aid] = {"agent": r["name"], "input": t["input"], "output": t["output"], "total": t["input"]+t["output"], "time": r["time"], "cost": cost(t["input"],t["output"],args.model)}
+            total = t["input"] + t["output"]
+            entry = {"name": r["name"], "input": t["input"], "output": t["output"], "total": total, "time": r["time"], "cost": cost(t["input"], t["output"], args.model)}
+            agents.append(entry)
+            if aid == "collar":
+                collar_total = total
+        out = {"model": args.model, "agents": agents, "collar": {"total_tokens": collar_total}}
         json_str = json.dumps(out, indent=2)
         print(json_str)
         Path("results.json").write_text(json_str)
