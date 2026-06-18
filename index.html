@@ -30,12 +30,11 @@
 </table>
 <p id="loading">Loading latest results…</p>
 
+<h2>Run on Your Machine</h2>
+<pre><code>git clone https://github.com/specdog/dogbench.git 2>/dev/null || (cd dogbench && git pull); cd dogbench && pip install -e . 2>/dev/null || ~/collar/.venv/bin/pip install -e .; which dotdog || npm install -g dotdog; ./dogbench --all --json > results.json && cat results.json</code></pre>
+<p><small>Paste into terminal. No conflicts. Works everywhere.</small></p>
+
 <h2>Submit Your Results</h2>
-<pre><code>git clone https://github.com/specdog/dogbench.git
-cd dogbench
-pip install -e .
-npm install -g dotdog
-./dogbench --all --json > results.json</code></pre>
 <p>Then <a href="https://github.com/specdog/dogbench/issues/new">open an issue</a> with your results.json attached.</p>
 
 <h2>How It Works</h2>
