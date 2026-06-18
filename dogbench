@@ -92,21 +92,31 @@ def detect():
         available.append("api")
     return available
 
-def count_tokens(agent_id):
+def count_tokens(agent_id, session_id=None):
     home = Path.home()
     if agent_id in ("collar", "hermes"):
         db_path = home / ".dag" / "state.db"
-        if db_path.exists():
+        if not db_path.exists():
+            return {"input": 0, "output": 0}
+        import sqlite3
+        # Wait up to 30s for async token write
+        for _ in range(30):
             try:
-                import sqlite3
                 conn = sqlite3.connect(str(db_path))
-                rows = conn.execute(
-                    "SELECT input_tokens, output_tokens FROM sessions ORDER BY started_at DESC LIMIT 1"
-                ).fetchall()
+                if session_id:
+                    rows = conn.execute(
+                        "SELECT input_tokens, output_tokens FROM sessions WHERE id=?",
+                        (session_id,)
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        "SELECT input_tokens, output_tokens FROM sessions ORDER BY started_at DESC LIMIT 1"
+                    ).fetchall()
                 conn.close()
                 if rows and rows[0][0]:
                     return {"input": rows[0][0], "output": rows[0][1] or 0}
             except: pass
+            time.sleep(1)
         return {"input": 0, "output": 0}
     if agent_id == "claude":
         path = home / "Library" / "Application Support" / "Claude" / "usage"
@@ -201,11 +211,21 @@ def main():
         print(f"  {cfg['name']} running...", end=" ", flush=True)
         start = time.time()
         try:
-            subprocess.run(cmd, shell=True, capture_output=True, timeout=300)
+            proc = subprocess.run(cmd, shell=True, capture_output=True, timeout=300)
             elapsed = time.time() - start
-            tokens = count_tokens(aid)
-            results[aid] = {"name": cfg["name"], "tokens": tokens, "time": elapsed, "error": None}
-            print(f"\033[32mOK\033[0m {elapsed:.0f}s")
+            # Parse session ID from stderr (collar prints "Session: 20260618_...")
+            sid = None
+            out = (proc.stderr + proc.stdout).decode(errors="replace")
+            for line in out.splitlines():
+                if "Session:" in line:
+                    sid = line.split("Session:")[-1].strip().split()[0]
+                    break
+            tokens = count_tokens(aid, session_id=sid)
+            results[aid] = {"name": cfg["name"], "tokens": tokens, "time": elapsed, "error": None if tokens["input"] > 0 else "no tokens recorded"}
+            if tokens["input"] > 0:
+                print(f"\033[32mOK\033[0m {elapsed:.0f}s")
+            else:
+                print(f"\033[33mTOK?\033[0m {elapsed:.0f}s")
         except subprocess.TimeoutExpired:
             results[aid] = {"name": cfg["name"], "tokens": {"input":0,"output":0}, "time":0, "error":"timeout"}
             print("\033[31mTIMEOUT\033[0m")
