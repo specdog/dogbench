@@ -33,6 +33,15 @@
 </table>
 <p id="loading">Loading latest results…</p>
 
+<h2>Run from Any Agent</h2>
+<table>
+<tr><th>Agent</th><th>Command</th></tr>
+<tr><td>Collar</td><td><code>/benchmark</code> or "run the benchmark"</td></tr>
+<tr><td>Claude Code</td><td>"run <code>cd ~/dogbench && git pull origin main && pip install -e . && ./dogbench</code>"</td></tr>
+<tr><td>Codex</td><td>"run <code>cd ~/dogbench && git pull origin main && pip install -e . && ./dogbench</code>"</td></tr>
+</table>
+<p>No terminal needed. Just ask your agent.</p>
+
 <h2>Run on Your Machine</h2>
 <pre><code id="install-cmd">cd ~/dogbench && git pull origin main && ~/collar/.venv/bin/pip install -e . && ./dogbench --all --json</code></pre>
 <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('install-cmd').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000)">📋 Copy</button>
