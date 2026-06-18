@@ -119,12 +119,18 @@ PRs welcome. Any CLI tool that accepts a prompt and writes usage logs can be ben
 ## Share Your Results
 
 ```bash
-# Generate and share
+# Run benchmark
 ./dogbench --all --json > results.json
-cat results.json | curl -X POST https://dogbench.specdog.dev/submit  # coming soon
 
-# Or just tweet a screenshot
-./dogbench --all  # post the output
+# Submit via PR (preferred)
+git checkout -b results/yourname
+git add results.json
+git commit -m "results: add benchmark data"
+git push origin results/yourname
+# Open a PR at https://github.com/specdog/dogbench
+
+# Or post to an issue
+open https://github.com/specdog/dogbench/issues/new
 ```
 
 ## Verify
