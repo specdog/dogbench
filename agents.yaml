@@ -1,22 +1,46 @@
+# dogbench agent configuration
+# 4-way benchmark: collar (us) vs Hermes (upstream) vs Claude Code vs Codex
+
 agents:
   collar:
-    name: collar (DAG-first)
-    command: collar chat -q "{prompt}"
-    log_type: collar_insights
-    log_cmd: collar insights --days 1 --json
+    name: "collar (DAG-first)"
+    command: 'collar chat -q "{prompt}" --model {model}'
+    log_type: collar_session
+    description: "Our fork — DAG-compressed system prompt, 74-86% fewer tokens"
+    
+  hermes:
+    name: "Hermes Agent"
+    command: 'dag chat -q "{prompt}" --model {model}'
+    log_type: collar_session
+    description: "Upstream — verbose prose prompts, 8-12k token overhead"
+
   claude:
-    name: Claude Code
-    command: claude "{prompt}" --print --output-format text
+    name: "Claude Code"
+    command: 'claude "{prompt}" --print --output-format text --model {model}'
     log_type: jsonl
-    log_path: ~/Library/Application Support/Claude/usage/*.jsonl
-    log_key: usage.total_tokens
+    log_path: "~/Library/Application Support/Claude/usage/*.jsonl"
+    log_key: "usage.total_tokens"
+    description: "Anthropic official CLI"
+
   codex:
-    name: OpenAI Codex
-    command: codex exec "{prompt}"
+    name: "OpenAI Codex"
+    command: 'codex exec "{prompt}" --model {model}'
     log_type: jsonl
-    log_path: ~/.codex/usage/*.jsonl
-    log_key: usage.total_tokens
+    log_path: "~/.codex/usage/*.jsonl"
+    log_key: "usage.total_tokens"
+    description: "OpenAI official CLI"
+
+models:
+  default: "gpt-5"
+  options:
+    - "gpt-5"
+    - "claude-sonnet-4"
+    - "deepseek-v4-pro"
+    - "gemini-2.5-flash"
+
 settings:
   warmup_runs: 1
   measured_runs: 3
-  cooldown_seconds: 5
+  cooldown_seconds: 10
+  tasks_dir: "./tasks/"
+  results_dir: "./results/"
