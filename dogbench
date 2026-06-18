@@ -1,38 +1,114 @@
 #!/usr/bin/env python3
-"""dogbench — one command to prove collar saves tokens."""
-import argparse, json, os, subprocess, sys, time
+"""dogbench — real token benchmarks. Collar vs everyone else."""
+import argparse, datetime, json, os, subprocess, sys, time
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-DEFAULT_TASK = "Write a Python script that reads CSV sales data, groups by category, calculates revenue, and writes unit tests. Use standard library only."
+DEFAULT_TASK = (
+    "In the specdog/dogbench project: what agents does dogbench support, "
+    "what is the benchmark flow, and what does it measure? "
+    "Answer concisely from the project structure."
+)
 
 AGENTS = {
     "collar": {"name": "collar (DAG-first)", "cmd": 'collar chat -q "{prompt}"', "color": "\033[32m"},
-    "claude": {"name": "Claude Code", "cmd": 'claude "{prompt}" --print', "color": "\033[34m"},
-    "codex":  {"name": "OpenAI Codex", "cmd": 'codex exec "{prompt}"', "color": "\033[35m"},
+    "hermes": {"name": "Hermes (upstream)",  "cmd": 'hermes chat -q "{prompt}"', "color": "\033[36m"},
+    "claude": {"name": "Claude Code",        "cmd": 'claude "{prompt}" --print', "color": "\033[34m"},
+    "codex":  {"name": "OpenAI Codex",        "cmd": 'codex exec "{prompt}"',   "color": "\033[35m"},
+    "api":    {"name": "API (raw)",           "cmd": None,                      "color": "\033[33m"},
 }
 
-RATES = {"deepseek-v4-pro": {"input": 0.50, "output": 2.00}, "gpt-5": {"input": 1.25, "output": 10.0}, "claude": {"input": 3.0, "output": 15.0}, "default": {"input": 1.0, "output": 5.0}}
+RATES = {
+    "deepseek-v4-pro":  {"input": 0.50, "output": 2.00},
+    "gpt-5":            {"input": 1.25, "output": 10.0},
+    "claude-sonnet-4":  {"input": 3.00, "output": 15.0},
+    "default":          {"input": 1.00, "output":  5.0},
+}
+
+# ── helpers ──────────────────────────────────────────────────────────
+
+def estimate_tokens(text):
+    return max(1, len(text) // 4)
+
+def _read_collar_config():
+    cfg = Path.home() / ".dag" / "config.yaml"
+    if cfg.exists():
+        try:
+            import yaml
+            with open(cfg) as f:
+                return yaml.safe_load(f) or {}
+        except: pass
+    return {}
+
+def detect_model():
+    d = _read_collar_config()
+    m = d.get("model", {})
+    if isinstance(m, dict):
+        return m.get("default", "deepseek-v4-pro")
+    return m if isinstance(m, str) and m else "deepseek-v4-pro"
+
+def get_api_credentials():
+    """Return (api_key, base_url) or (None, None)."""
+    d = _read_collar_config()
+    m = d.get("model", {})
+    provider = m.get("provider", "deepseek") if isinstance(m, dict) else "deepseek"
+    base_url = m.get("base_url", "https://api.deepseek.com/v1") if isinstance(m, dict) else "https://api.deepseek.com/v1"
+
+    env_map = {"deepseek": "DEEPSEEK_API_KEY", "openai": "OPENAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
+    api_key = os.environ.get(env_map.get(provider, ""))
+
+    if not api_key:
+        providers = d.get("providers", {})
+        if provider in providers and isinstance(providers[provider], dict):
+            k = providers[provider].get("api_key", "")
+            if k: api_key = k
+    return api_key, base_url
+
+def call_raw_api(task, model):
+    import urllib.request
+    api_key, base_url = get_api_credentials()
+    if not api_key:
+        raise RuntimeError("no API key — set DEEPSEEK_API_KEY or OPENAI_API_KEY")
+
+    payload = json.dumps({
+        "model": model,
+        "messages": [{"role": "user", "content": task}],
+    }).encode()
+    req = urllib.request.Request(f"{base_url}/chat/completions", data=payload, headers={
+        "Authorization": f"Bearer {api_key}", "Content-Type": "application/json"})
+    resp = urllib.request.urlopen(req, timeout=300)
+    body = json.loads(resp.read())
+    u = body.get("usage", {})
+    return {"input": u.get("prompt_tokens", 0), "output": u.get("completion_tokens", 0)}
 
 def detect():
-    return [a for a, c in AGENTS.items() if subprocess.run(["which", c["cmd"].split()[0]], capture_output=True).returncode == 0]
+    available = []
+    for aid, cfg in AGENTS.items():
+        if aid == "api": continue
+        exe = cfg["cmd"].split()[0]
+        if subprocess.run(["which", exe], capture_output=True).returncode == 0:
+            available.append(aid)
+    if get_api_credentials()[0]:
+        available.append("api")
+    return available
 
 def count_tokens(agent_id):
     home = Path.home()
-    if agent_id == "collar":
-        total_in = total_out = 0
+    if agent_id in ("collar", "hermes"):
         db_path = home / ".dag" / "state.db"
         if db_path.exists():
             try:
                 import sqlite3
                 conn = sqlite3.connect(str(db_path))
-                rows = conn.execute("SELECT input_tokens, output_tokens FROM sessions ORDER BY started_at DESC LIMIT 1").fetchall()
+                rows = conn.execute(
+                    "SELECT input_tokens, output_tokens FROM sessions ORDER BY started_at DESC LIMIT 1"
+                ).fetchall()
                 conn.close()
                 if rows and rows[0][0]:
                     return {"input": rows[0][0], "output": rows[0][1] or 0}
             except: pass
-        return {"input": total_in, "output": total_out}
-    elif agent_id == "claude":
+        return {"input": 0, "output": 0}
+    if agent_id == "claude":
         path = home / "Library" / "Application Support" / "Claude" / "usage"
     elif agent_id == "codex":
         path = home / ".codex" / "usage"
@@ -50,45 +126,33 @@ def count_tokens(agent_id):
             except: continue
     return {"input": total_in, "output": total_out}
 
-def fmt(n): return f"{n:,}" if n else "N/A"
+def fmt(n):     return f"{n:,}" if n else "N/A"
 def cost(i, o, m="default"):
     r = RATES.get(m, RATES["default"])
-    return (i/1e6)*r["input"] + (o/1e6)*r["output"]
+    return (i / 1e6) * r["input"] + (o / 1e6) * r["output"]
 
+def git_sha():
+    r = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=SCRIPT_DIR, capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else ""
 
-def detect_model():
-    """Auto-detect the active model from collar's config.yaml."""
-    try:
-        config = Path.home() / ".dag" / "config.yaml"
-        if config.exists():
-            import yaml
-            with open(config) as f:
-                data = yaml.safe_load(f) or {}
-            m = data.get("model")
-            if isinstance(m, dict):
-                return m.get("default", "deepseek-v4-pro")
-            if isinstance(m, str) and m:
-                return m
-    except: pass
-    return "deepseek-v4-pro"
-
+# ── main ─────────────────────────────────────────────────────────────
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("task", nargs="?", default=DEFAULT_TASK)
     p.add_argument("--model", default=detect_model())
-    p.add_argument("--compare", nargs="*", default=["claude", "codex"])
+    p.add_argument("--compare", nargs="*", default=["hermes", "claude", "codex"])
     p.add_argument("--all", action="store_true")
+    p.add_argument("--raw", action="store_true", help="Include raw API (needs API key)")
     p.add_argument("--json", action="store_true")
-    p.add_argument("--dag", action="store_true", help="Output as .dag file")
-    p.add_argument("--submit", action="store_true", help="Auto-submit results as a PR to the leaderboard")
-    p.add_argument("--no-submit", action="store_true", help="Skip auto-submit to leaderboard")
+    p.add_argument("--dag", action="store_true")
+    p.add_argument("--submit", action="store_true")
+    p.add_argument("--no-submit", action="store_true")
     args = p.parse_args()
 
-    # Always save JSON and submit unless --no-submit
     if not args.json:
         args.json = True
-    args._submit = not getattr(args, 'no_submit', False)
+    args._submit = not getattr(args, "no_submit", False)
 
     available = detect()
     if "collar" not in available:
@@ -96,17 +160,43 @@ def main():
 
     targets = ["collar"]
     if args.all:
-        targets = [a for a in available if a != "collar"][:4]
-        targets.insert(0, "collar")
+        for a in available:
+            if a != "collar" and a not in targets:
+                targets.append(a)
+                if len(targets) >= 5: break
     else:
         for a in args.compare:
-            if a in available: targets.append(a)
+            if a in available and a not in targets:
+                targets.append(a)
 
-    print(f"\n\033[1m  dogbench\033[0m  {len(targets)} agents  model={args.model}\n")
+    if args.raw and "api" in available and "api" not in targets:
+        targets.append("api")
+
+    task_tokens = estimate_tokens(args.task)
+    ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    sha = git_sha()
+    print(f"\n\033[1m  dogbench\033[0m  {len(targets)} agents  model={args.model}  task≈{task_tokens}t\n")
 
     results = {}
     for aid in targets:
         cfg = AGENTS[aid]
+
+        # ── raw API ──
+        if aid == "api":
+            print(f"  {cfg['name']} running...", end=" ", flush=True)
+            start = time.time()
+            try:
+                tokens = call_raw_api(args.task, args.model)
+                elapsed = time.time() - start
+                results[aid] = {"name": cfg["name"], "tokens": tokens, "time": elapsed, "error": None}
+                print(f"\033[32mOK\033[0m {elapsed:.0f}s")
+            except Exception as e:
+                results[aid] = {"name": cfg["name"], "tokens": {"input":0,"output":0}, "time":0, "error": str(e)}
+                print(f"\033[31mERR\033[0m {e}")
+            time.sleep(1)
+            continue
+
+        # ── CLI agent ──
         cmd = cfg["cmd"].replace("{prompt}", args.task)
         print(f"  {cfg['name']} running...", end=" ", flush=True)
         start = time.time()
@@ -124,52 +214,91 @@ def main():
             print(f"\033[31mERR\033[0m")
         time.sleep(2)
 
-    print("\n  Agent                Input     Output      Cost")
-    print("  " + "-" * 55)
+    # ── table ──
+    print("\n  Agent                Input     Output      Cost    Overhead")
+    print("  " + "-" * 68)
     cd = results.get("collar", {}).get("tokens", {})
-    ct = cd.get("input",0) + cd.get("output",0)
+    ct = cd.get("input", 0) + cd.get("output", 0)
 
     for aid in targets:
         r = results.get(aid, {})
         name = r.get("name", aid)
         tok = r.get("tokens", {})
-        inp, out = tok.get("input",0), tok.get("output",0)
+        inp, out = tok.get("input", 0), tok.get("output", 0)
         c = cost(inp, out, args.model)
-        color = AGENTS.get(aid,{}).get("color","")
+        color = AGENTS.get(aid, {}).get("color", "")
+        oh = f"{inp // task_tokens}×" if task_tokens and inp else "—"
         if r.get("error"):
-            print(f"  {color}{name:<20s}  {'ERROR':>8s}  {'':>8s}  {'':>7s}\033[0m")
+            print(f"  {color}{name:<20s}  {'ERROR':>8s}  {'':>8s}  {'':>7s}  {'':>8s}\033[0m")
         elif inp == 0:
-            print(f"  {color}{name:<20s}  {'N/A':>8s}  {'N/A':>8s}  {'N/A':>7s}\033[0m")
+            print(f"  {color}{name:<20s}  {'N/A':>8s}  {'N/A':>8s}  {'N/A':>7s}  {'N/A':>7s}\033[0m")
         else:
-            print(f"  {color}{name:<20s}  {fmt(inp):>8s}  {fmt(out):>8s}  ${c:>6.4f}\033[0m")
+            print(f"  {color}{name:<20s}  {fmt(inp):>8s}  {fmt(out):>8s}  ${c:>6.4f}  {oh:>8s}\033[0m")
     print()
 
+    # ── savings ──
     if ct > 0:
         for aid in targets[1:]:
             r = results.get(aid, {})
-            tt = r.get("tokens", {}).get("input",0) + r.get("tokens", {}).get("output",0)
+            tt = r.get("tokens", {}).get("input", 0) + r.get("tokens", {}).get("output", 0)
             if tt > 0:
                 saved = tt - ct
-                pct = (saved/tt)*100
+                pct = (saved / tt) * 100
                 if saved > 0:
                     print(f"  \033[1;32mCollar saved {fmt(saved)} tokens ({pct:.0f}%) vs {r['name']}\033[0m")
-                    print(f"    \033[1;32m${cost(cd.get('input',0),cd.get('output',0),args.model) - cost(r['tokens'].get('input',0),r['tokens'].get('output',0),args.model):.4f}\033[0m saved\n")
+                    print(f"    \033[1;32m${cost(cd['input'],cd['output'],args.model):.6f} vs ${cost(r['tokens']['input'],r['tokens']['output'],args.model):.6f}\033[0m\n")
+                elif saved < 0:
+                    print(f"  \033[1;31mCollar used {fmt(-saved)} more tokens ({-pct:.0f}%) vs {r['name']}\033[0m\n")
+                else:
+                    print(f"  \033[1;33mCollar tied with {r['name']}\033[0m\n")
 
+    # ── JSON output ──
     if args.json:
-        agents = []
+        agents_out = []
         collar_total = 0
         for aid in targets:
             r = results.get(aid, {})
             t = r.get("tokens", {})
             total = t["input"] + t["output"]
-            entry = {"name": r["name"], "input": t["input"], "output": t["output"], "total": total, "time": r["time"], "cost": cost(t["input"], t["output"], args.model)}
-            agents.append(entry)
+            entry = {
+                "agent_id": aid,
+                "name": r["name"],
+                "input": t["input"],
+                "output": t["output"],
+                "total": total,
+                "time": round(r["time"], 1),
+                "cost": round(cost(t["input"], t["output"], args.model), 6),
+            }
+            agents_out.append(entry)
             if aid == "collar":
                 collar_total = total
-        out = {"model": args.model, "agents": agents, "collar": {"total_tokens": collar_total}}
-        json_str = json.dumps(out, indent=2)
+
+        run = {
+            "timestamp": ts,
+            "commit": sha,
+            "model": args.model,
+            "task_tokens": task_tokens,
+            "agents": agents_out,
+            "collar": {"total_tokens": collar_total},
+        }
+
+        # ── append to history ──
+        history_path = SCRIPT_DIR / "results.json"
+        history = []
+        if history_path.exists():
+            try:
+                history = json.loads(history_path.read_text())
+                if not isinstance(history, list):
+                    history = [history]  # migrate old single-object format
+            except: pass
+        history.append(run)
+        # keep last 20
+        if len(history) > 20:
+            history = history[-20:]
+        history_path.write_text(json.dumps(history, indent=2))
+
+        json_str = json.dumps(run, indent=2)
         print(json_str)
-        Path("results.json").write_text(json_str)
 
     if args.dag:
         lines = ["[dogbench-results]"]
@@ -180,24 +309,23 @@ def main():
         Path("results.dag").write_text("\n".join(lines))
         print("  results.dag written\n")
 
+    # ── auto-submit ──
     if args._submit:
-        import datetime
-        ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-        branch = f"results/auto-{ts}"
+        branch = f"results/auto-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}"
         subprocess.run(["git", "checkout", "-b", branch], cwd=SCRIPT_DIR, capture_output=True)
         subprocess.run(["git", "add", "results.json"], cwd=SCRIPT_DIR, capture_output=True)
         subprocess.run(["git", "commit", "-m", f"chore: auto-submit {ts}"], cwd=SCRIPT_DIR, capture_output=True)
         r = subprocess.run(["git", "push", "origin", branch], cwd=SCRIPT_DIR, capture_output=True, text=True)
         if r.returncode == 0:
-            pr = subprocess.run(["gh", "pr", "create", "--repo", "specdog/dogbench", 
-                  "--head", branch, "--base", "main", 
+            pr = subprocess.run(["gh", "pr", "create", "--repo", "specdog/dogbench",
+                  "--head", branch, "--base", "main",
                   "--title", f"chore: auto-submit {ts}",
-                  "--body", f"Automated benchmark submission from dogbench.\n\n```json\n{json.dumps(out,indent=2)}\n```"],
+                  "--body", f"Automated benchmark submission.\n\n```json\n{json.dumps(run, indent=2)}\n```"],
                   cwd=SCRIPT_DIR, capture_output=True, text=True)
             print(f"\n  \033[32m✓ PR submitted: {pr.stdout.strip()}\033[0m")
             print(f"  View at https://specdog.github.io/dogbench/")
         else:
-            print(f"\n  \033[33m⚠ git push failed — create PR manually:\033[0m")
+            print(f"\n  \033[33m⚠ push failed — create PR manually:\033[0m")
             print(f"  gh pr create --repo specdog/dogbench --head {branch}")
 
 if __name__ == "__main__":

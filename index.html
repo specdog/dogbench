@@ -5,84 +5,82 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>dogbench — AI Agent Token Benchmarks</title>
 <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; background: #111; color: #eee; }
-  h1 { color: #4ade80; }
-  table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #333; }
-  th { color: #94a3b8; font-weight: 600; }
-  .save { color: #4ade80; font-weight: bold; }
-  .badge { display: inline-block; padding: 4px 10px; border-radius: 4px; font-size: 13px; }
-  .badge-green { background: #166534; color: #4ade80; }
-  a { color: #60a5fa; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; background: #111; color: #eee; }
+  h1 { color: #4ade80; margin-bottom: 4px; }
+  h2 { margin: 32px 0 12px; color: #e2e8f0; }
+  h3 { margin: 16px 0 8px; color: #94a3b8; font-size: .95em; text-transform: uppercase; letter-spacing: .05em; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #1e293b; font-size: .92em; }
+  th { color: #64748b; font-weight: 600; font-size: .82em; text-transform: uppercase; }
+  .save { color: #4ade80; font-weight: 700; }
+  .lose { color: #ef4444; }
+  .warn { color: #f59e0b; }
+  .muted { color: #64748b; font-size: .85em; }
+  a { color: #60a5fa; text-decoration: none; }
+  a:hover { text-decoration: underline; }
   pre { background: #1a1a2e; padding: 16px; border-radius: 8px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
   code { color: #fbbf24; font-size: 14px; }
   .copy-btn { float: right; margin-top: -8px; background: linear-gradient(135deg, #4285f4, #8b5cf6); color: #fff; border: none; padding: 8px 20px; border-radius: 24px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s; box-shadow: 0 2px 8px rgba(139,92,246,0.3); }
   .copy-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(139,92,246,0.5); }
   .copy-btn:active { transform: scale(0.96); }
+  .bar-wrap { background: #1e293b; border-radius: 3px; height: 5px; margin-top: 4px; overflow: hidden; }
+  .bar-collar { background: #4ade80; height: 100%; border-radius: 3px; }
+  .bar-other { background: #475569; height: 100%; border-radius: 3px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: .78em; font-weight: 600; }
+  .badge-save { background: #166534; color: #4ade80; }
+  .badge-lose { background: #451a1a; color: #ef4444; }
+  .badge-tie { background: #1e293b; color: #94a3b8; }
+  .hero-save { font-size: 1.4em; font-weight: 700; }
+  footer { margin-top: 60px; padding: 20px 0; border-top: 1px solid #1e293b; color: #475569; font-size: 13px; }
+  footer a { color: #475569; }
+  .tabs { display: flex; gap: 4px; margin: 16px 0; }
+  .tab { padding: 6px 16px; border-radius: 6px 6px 0 0; cursor: pointer; font-size: .85em; border: 1px solid transparent; background: transparent; color: #94a3b8; }
+  .tab.active { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  .tab:hover { color: #e2e8f0; }
+  .spark { display: inline-flex; gap: 1px; align-items: flex-end; height: 24px; vertical-align: middle; }
+  .spark-bar { width: 3px; min-height: 2px; background: #4ade80; border-radius: 1px; }
+  .spark-bar.other { background: #475569; }
 </style>
 </head>
 <body>
 
 <h1>🐕 dogbench</h1>
-<p>Real token benchmarks for AI coding agents. No estimates. No bias.<br>
-<a href="https://github.com/specdog/dogbench">github.com/specdog/dogbench</a></p>
+<p class="muted">Real token benchmarks for AI coding agents. No estimates. No bias.<br>
+<a href="https://github.com/specdog/dogbench">github.com/specdog/dogbench</a> · 
+<span id="run-count"></span></p>
 
-<h2>Live Results</h2>
-<table id="results">
-  <tr><th>Agent</th><th>Input Tokens</th><th>Output Tokens</th><th>Total</th><th>Cost</th><th>Savings vs Collar</th></tr>
+<!-- latest run -->
+<h2>Latest Run <span id="run-meta" class="muted"></span></h2>
+<table id="latest">
+  <tr><th>Agent</th><th>Input</th><th>Output</th><th>Total</th><th>Cost</th><th>Overhead</th><th>vs Collar</th></tr>
 </table>
-<p id="loading">Loading latest results…</p>
 
-<h2>Run from Any Agent</h2>
-<table>
-<tr><th>Agent</th><th>Command</th></tr>
-<tr><td>Collar</td><td><code>/benchmark</code> or "run the benchmark"</td></tr>
-<tr><td>Claude Code</td><td>"run <code>cd ~/dogbench && git pull origin main && pip install -e . && ./dogbench</code>"</td></tr>
-<tr><td>Codex</td><td>"run <code>cd ~/dogbench && git pull origin main && pip install -e . && ./dogbench</code>"</td></tr>
+<!-- savings hero -->
+<div id="hero" style="margin: 16px 0; padding: 16px 20px; background: #166534; border-radius: 8px; display: none;">
+  <span class="hero-save" id="hero-text"></span>
+</div>
+
+<!-- best per agent -->
+<h2>All-Time Best</h2>
+<table id="best">
+  <tr><th>Agent</th><th>Best Total</th><th>Input</th><th>Output</th><th>Cost</th><th>vs Collar</th><th>Runs</th></tr>
 </table>
-<p>No terminal needed. Just ask your agent.</p>
+
+<!-- history -->
+<h2>History <span class="muted">(last 10)</span></h2>
+<div id="history"></div>
+
+<div id="nodata" style="text-align:center;padding:40px;color:#64748b;">
+  No benchmark data yet. Run <code>./dogbench</code> on your machine.
+</div>
 
 <h2>Run on Your Machine</h2>
-<pre><code id="install-cmd">cd ~/dogbench && git pull origin main && ~/collar/.venv/bin/pip install -e . && ./dogbench --all --json</code></pre>
+<pre><code id="install-cmd">cd ~/dogbench && git pull origin main && ~/collar/.venv/bin/pip install -e . && ./dogbench --all --raw --json</code></pre>
 <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('install-cmd').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000)">📋 Copy</button>
-<p>Detects collar, Claude Code, and Codex automatically. Works with any model.</p>
+<p class="muted">Detects collar, hermes, Claude Code, and Codex. Add <code>--raw</code> for raw API comparison (needs API key).</p>
 
-<h3>Other Setups</h3>
-<table>
-<tr><th>Setup</th><th>Command</th></tr>
-<tr><td>Collar only</td><td><code>./dogbench --json</code></td></tr>
-<tr><td>Collar + Claude Code</td><td><code>./dogbench --all --json</code></td></tr>
-<tr><td>Collar + Codex</td><td><code>./dogbench --all --json</code></td></tr>
-<tr><td>Collar + Hermes (upstream)</td><td><code>./dogbench --compare hermes --json</code></td></tr>
-<tr><td>DeepSeek backend</td><td><code>./dogbench --model deepseek-v4-pro --json</code></td></tr>
-<tr><td>Claude backend</td><td><code>./dogbench --model claude-sonnet-4 --json</code></td></tr>
-<tr><td>GPT-5 backend</td><td><code>./dogbench --model gpt-5 --json</code></td></tr>
-</table>
-
-<h2>Submit Your Results</h2>
-<p>Then <a href="https://github.com/specdog/dogbench/issues/new">open an issue</a> with your results.json attached.</p>
-
-<h2>How It Works</h2>
-<p>Dogbench runs the same coding task through every agent on your machine. It reads official usage logs — no estimates, no bias. Your own hardware, your own tokens.</p>
-
-<script>
-fetch('results.json')
-  .then(r => r.json())
-  .then(data => {
-    document.getElementById('loading').remove();
-    const table = document.getElementById('results');
-    const collar = data.collar || {};
-    data.agents.forEach(a => {
-      const save = collar.total_tokens ? collar.total_tokens - a.total_tokens : 0;
-      const pct = collar.total_tokens ? Math.round((save / a.total_tokens) * 100) : 0;
-      const row = table.insertRow();
-      row.innerHTML = `<td>${a.name}</td><td>${a.input.toLocaleString()}</td><td>${a.output.toLocaleString()}</td><td>${a.total.toLocaleString()}</td><td>$${a.cost.toFixed(4)}</td><td class="save">${save > 0 ? '↓ ' + save.toLocaleString() + ' (' + pct + '%)' : '—'}</td>`;
-    });
-  })
-  .catch(() => document.getElementById('loading').textContent = 'Run dogbench on your machine to see results.');
-</script>
-
-<footer style="margin-top:60px;padding:20px 0;border-top:1px solid #333;color:#64748b;font-size:13px">
+<footer>
   <a href="https://github.com/specdog">specdog</a> · 
   <a href="https://github.com/specdog/dotdog">dotdog</a> · 
   <a href="https://github.com/specdog/collar">collar</a> · 
@@ -90,6 +88,157 @@ fetch('results.json')
   <a href="https://github.com/specdog/dogbench">dogbench</a>
   <span style="float:right">v0.1.0</span>
 </footer>
+
+<script>
+// ── helpers ──
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+
+function fmt(n) { return n.toLocaleString(); }
+function pct(a, b) { return b ? Math.round((a / b) * 100) : 0; }
+
+function sparkHTML(values, max, cls) {
+  if (!values.length) return '';
+  let h = '';
+  for (const v of values) {
+    const hgt = max ? Math.max(2, Math.round((v / max) * 24)) : 2;
+    h += `<span class="spark-bar ${cls||''}" style="height:${hgt}px" title="${fmt(v)} tokens"></span>`;
+  }
+  return `<span class="spark">${h}</span>`;
+}
+
+// ── load ──
+fetch('results.json')
+  .then(r => r.json())
+  .then(raw => {
+    const history = Array.isArray(raw) ? raw : [raw];
+    if (!history.length) throw new Error('empty');
+
+    $('nodata').style.display = 'none';
+    $('#run-count').textContent = `${history.length} run${history.length>1?'s':''} recorded`;
+
+    const latest = history[history.length - 1];
+    const taskTokens = latest.task_tokens || 0;
+    const model = latest.model || '';
+    const collarRow = latest.agents.find(a => a.agent_id === 'collar');
+    const collarTotal = collarRow ? collarRow.total : 0;
+
+    $('#run-meta').textContent =
+      `· ${latest.timestamp ? latest.timestamp.slice(0,16) : ''} · model: ${model} · task: ~${taskTokens}t`;
+
+    // ── latest table ──
+    const tbl = $('#latest');
+    let maxTotal = 0;
+    latest.agents.forEach(a => { if (a.total > maxTotal) maxTotal = a.total; });
+
+    latest.agents.forEach(a => {
+      const isCollar = a.agent_id === 'collar';
+      const save = collarTotal - a.total;
+      const savePct = pct(save, a.total);
+      const overhead = taskTokens && a.input ? Math.round(a.input / taskTokens) + '×' : '—';
+
+      let vs = '—';
+      if (!isCollar && a.total > 0) {
+        if (save > 0) vs = `<span class="badge badge-save">↓ ${fmt(save)} (${savePct}%)</span>`;
+        else if (save < 0) vs = `<span class="badge badge-lose">↑ ${fmt(-save)} (${-savePct}%)</span>`;
+        else vs = `<span class="badge badge-tie">tied</span>`;
+      }
+      if (isCollar && latest.agents.length === 1) vs = '<span class="muted">baseline</span>';
+
+      const barPct = maxTotal ? Math.round((a.total / maxTotal) * 100) : 0;
+      const barCls = isCollar ? 'bar-collar' : 'bar-other';
+
+      const row = tbl.insertRow();
+      row.innerHTML = `<td>${a.name}</td>
+        <td>${fmt(a.input)}</td><td>${fmt(a.output)}</td>
+        <td>${fmt(a.total)}<div class="bar-wrap"><div class="${barCls}" style="width:${barPct}%"></div></div></td>
+        <td>$${a.cost.toFixed(6)}</td><td>${overhead}</td><td>${vs}</td>`;
+    });
+
+    // ── hero savings ──
+    const otherAgents = latest.agents.filter(a => a.agent_id !== 'collar' && a.total > 0);
+    if (otherAgents.length) {
+      const bestSave = otherAgents.reduce((best, a) => {
+        const s = collarTotal - a.total;
+        return s > best.saved ? {name: a.name, saved: s, pct: pct(s, a.total)} : best;
+      }, {name: '', saved: 0, pct: 0});
+
+      if (bestSave.saved > 0) {
+        $('#hero').style.display = 'block';
+        $('#hero-text').textContent =
+          `⚡ Collar saves ${fmt(bestSave.saved)} tokens (${bestSave.pct}%) vs ${bestSave.name}`;
+      }
+    }
+
+    // ── all-time best per agent ──
+    const bestMap = {};
+    history.forEach(run => {
+      run.agents.forEach(a => {
+        const key = a.agent_id;
+        if (!bestMap[key] || a.total < bestMap[key].total) {
+          bestMap[key] = {
+            name: a.name, total: a.total, input: a.input, output: a.output, cost: a.cost,
+            agent_id: a.agent_id,
+          };
+        }
+        if (!bestMap[key]._runs) bestMap[key]._runs = 0;
+        bestMap[key]._runs++;
+      });
+    });
+
+    const bestCollar = bestMap['collar'];
+    const bTbl = $('#best');
+    Object.values(bestMap).forEach(b => {
+      const isCollar = b.agent_id === 'collar';
+      const save = bestCollar ? bestCollar.total - b.total : 0;
+      const savePct = pct(save, b.total);
+      let vs = '—';
+      if (!isCollar && b.total > 0 && bestCollar) {
+        if (save > 0) vs = `<span class="badge badge-save">↓ ${fmt(save)} (${savePct}%)</span>`;
+        else if (save < 0) vs = `<span class="badge badge-lose">↑ ${fmt(-save)} (${-savePct}%)</span>`;
+      }
+      const row = bTbl.insertRow();
+      row.innerHTML = `<td>${b.name}</td><td>${fmt(b.total)}</td><td>${fmt(b.input)}</td><td>${fmt(b.output)}</td><td>$${b.cost.toFixed(6)}</td><td>${vs}</td><td>${b._runs||0}</td>`;
+    });
+
+    // ── history ──
+    const histDiv = $('#history');
+    const last10 = history.slice(-10).reverse();
+
+    // aggregate per-agent token history for sparklines
+    const byAgent = {};
+    history.forEach(run => {
+      run.agents.forEach(a => {
+        if (!byAgent[a.agent_id]) byAgent[a.agent_id] = [];
+        byAgent[a.agent_id].push(a.total);
+      });
+    });
+    const sparkMax = Math.max(...Object.values(byAgent).flat());
+
+    last10.forEach(run => {
+      const entry = document.createElement('div');
+      entry.style.cssText = 'margin:8px 0;padding:8px 12px;background:#1a1a2e;border-radius:6px;font-size:.85em;';
+      let agentsHTML = '';
+      run.agents.forEach(a => {
+        const vals = byAgent[a.agent_id] || [];
+        const spark = sparkHTML(vals, sparkMax, a.agent_id==='collar'?'':'other');
+        agentsHTML +=
+          `<span style="margin-right:20px">${a.name}:
+            <strong>${fmt(a.total)}t</strong> ${spark}
+            <span class="muted">$${a.cost.toFixed(6)}</span></span>`;
+      });
+      entry.innerHTML =
+        `<span class="muted">${(run.timestamp||'').slice(0,16)} · ${run.model}</span><br>${agentsHTML}`;
+      histDiv.appendChild(entry);
+    });
+
+  })
+  .catch(() => {
+    $('nodata').style.display = 'block';
+    $$('h2').forEach(h => h.style.display = 'none');
+    $$('table').forEach(t => t.style.display = 'none');
+  });
+</script>
 
 </body>
 </html>

@@ -15,17 +15,21 @@ jobs:
           import json, sys
           with open('results.json') as f:
               data = json.load(f)
-          assert 'model' in data, 'missing model'
-          assert 'agents' in data, 'missing agents'
-          for a in data['agents']:
-              assert 'name' in a, 'missing name'
-              assert 'input' in a, 'missing input'
-              assert 'output' in a, 'missing output'
-              assert 'total' in a, 'missing total'
-              assert 'cost' in a, 'missing cost'
-          assert 'collar' in data, 'missing collar'
-          assert 'total_tokens' in data['collar'], 'collar: missing total_tokens'
-          print(f'✓ Valid: {len(data[\"agents\"])} agents, model={data[\"model\"]}')
+          # Accept both single run and array format
+          runs = data if isinstance(data, list) else [data]
+          assert len(runs) > 0, 'empty results'
+          for run in runs:
+              assert 'model' in run, 'missing model'
+              assert 'agents' in run, 'missing agents'
+              for a in run['agents']:
+                  assert 'name' in a, 'missing name'
+                  assert 'input' in a, 'missing input'
+                  assert 'output' in a, 'missing output'
+                  assert 'total' in a, 'missing total'
+                  assert 'cost' in a, 'missing cost'
+              assert 'collar' in run, 'missing collar'
+              assert 'total_tokens' in run['collar'], 'collar: missing total_tokens'
+          print(f'✓ Valid: {len(runs)} runs, latest model={runs[-1][\"model\"]}')
           "
   
   auto-approve:
