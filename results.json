@@ -3,14 +3,14 @@
   "agents": [
     {
       "name": "collar (DAG-first)",
-      "input": 44878,
-      "output": 699,
-      "total": 45577,
-      "time": 15.730374813079834,
-      "cost": 0.023837
+      "input": 43698,
+      "output": 734,
+      "total": 44432,
+      "time": 18.40237021446228,
+      "cost": 0.023317
     }
   ],
   "collar": {
-    "total_tokens": 45577
+    "total_tokens": 44432
   }
 }
