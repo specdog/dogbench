@@ -94,8 +94,11 @@ def detect():
 
 def count_tokens(agent_id, session_id=None):
     home = Path.home()
-    if agent_id in ("collar", "hermes"):
+    if agent_id == "collar":
         db_path = home / ".dag" / "state.db"
+    elif agent_id == "hermes":
+        db_path = home / ".hermes" / "state.db"
+    if agent_id in ("collar", "hermes"):
         if not db_path.exists():
             return {"input": 0, "output": 0}
         import sqlite3
