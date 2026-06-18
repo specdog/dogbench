@@ -80,7 +80,8 @@ def main():
     p.add_argument("--compare", nargs="*", default=["claude", "codex"])
     p.add_argument("--all", action="store_true")
     p.add_argument("--json", action="store_true")
-    p.add_argument("--dag", action="store_true")
+    p.add_argument("--dag", action="store_true", help="Output as .dag file")
+    p.add_argument("--submit", action="store_true", help="Auto-submit results as a PR to the leaderboard")
     args = p.parse_args()
 
     available = detect()
@@ -164,6 +165,26 @@ def main():
             lines.append(f"{aid}-> tokens:{t['input']+t['output']}(11), cost:{cost(t['input'],t['output'],args.model):.5f}(11)")
         Path("results.dag").write_text("\n".join(lines))
         print("  results.dag written\n")
+
+    if args.submit:
+        import datetime
+        ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        branch = f"results/auto-{ts}"
+        subprocess.run(["git", "checkout", "-b", branch], cwd=SCRIPT_DIR, capture_output=True)
+        subprocess.run(["git", "add", "results.json"], cwd=SCRIPT_DIR, capture_output=True)
+        subprocess.run(["git", "commit", "-m", f"results: auto-submit {ts}"], cwd=SCRIPT_DIR, capture_output=True)
+        r = subprocess.run(["git", "push", "origin", branch], cwd=SCRIPT_DIR, capture_output=True, text=True)
+        if r.returncode == 0:
+            pr = subprocess.run(["gh", "pr", "create", "--repo", "specdog/dogbench", 
+                  "--head", branch, "--base", "main", 
+                  "--title", f"results: auto-submit {ts}",
+                  "--body", f"Automated benchmark submission from dogbench.\n\n```json\n{json.dumps(out,indent=2)}\n```"],
+                  cwd=SCRIPT_DIR, capture_output=True, text=True)
+            print(f"\n  \033[32m✓ PR submitted: {pr.stdout.strip()}\033[0m")
+            print(f"  View at https://specdog.github.io/dogbench/")
+        else:
+            print(f"\n  \033[33m⚠ git push failed — create PR manually:\033[0m")
+            print(f"  gh pr create --repo specdog/dogbench --head {branch}")
 
 if __name__ == "__main__":
     main()

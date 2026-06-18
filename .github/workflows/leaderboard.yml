@@ -1,0 +1,39 @@
+name: leaderboard
+on:
+  pull_request:
+    branches: [main]
+    paths: [results.json]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate results.json schema
+        run: |
+          python3 -c "
+          import json, sys
+          with open('results.json') as f:
+              data = json.load(f)
+          assert 'model' in data, 'missing model'
+          assert 'results' in data, 'missing results'
+          for aid, r in data['results'].items():
+              assert 'agent' in r, f'{aid}: missing agent'
+              assert 'input' in r, f'{aid}: missing input'
+              assert 'output' in r, f'{aid}: missing output'
+              assert 'total' in r, f'{aid}: missing total'
+              assert 'cost' in r, f'{aid}: missing cost'
+          print(f'✓ Valid: {len(data[\"results\"])} agents, model={data[\"model\"]}')
+          "
+  
+  auto-approve:
+    needs: validate
+    if: startsWith(github.head_ref, 'results/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Auto-approve benchmark PR
+        run: |
+          gh pr review ${{ github.event.pull_request.number }} --approve --body "✓ Benchmark results validated. Merging."
+          gh pr merge ${{ github.event.pull_request.number }} --merge --admin
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
