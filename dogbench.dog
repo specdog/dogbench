@@ -1,0 +1,32 @@
+---
+name: dogbench
+version: 0.1.0
+author: specdog
+license: MIT
+---
+
+[dogbench]
+Desc→ Real token benchmarks for AI coding agents. No estimates.(11)
+Run→ dogbench [task] [--all] [--json] [--dag] [--model NAME](11)
+Install→ pip install dogbench(11)
+
+[agents]
+collar→ CLI:collar(11), Log:collar_session(11), Detect:which(11)
+claude→ CLI:claude(11), Log:jsonl(11), Path:~/Library/Application Support/Claude/usage/(11)
+codex→ CLI:codex(11), Log:jsonl(11), Path:~/.codex/usage/(11)
+hermes→ CLI:dag(11), Log:collar_session(11), Detect:which(11)
+
+[benchmark]
+Flow→ Detect→Run→Collect→Compare→Output(11)
+Output→ Text:table(11), JSON:machine(11), DAG:native(11)
+Measure→ Input:tokens(11), Output:tokens(11), Cost:usd(11)
+Compare→ Collar:baseline(11), Others:savings(11)
+
+[telemetry]
+Format→ JSON:schema(11), DAG:dogspec(11)
+Cost→ Model:rates(11), Input:per1M(11), Output:per1M(11)
+Savings→ Delta:tokens(11), Percent:pct(11), Money:usd(11)
+
+[deps]
+Runtime→ python3.11+(11), collar(11), dotdog(11)
+Optional→ claude(11), codex(11), codexbar(11)
