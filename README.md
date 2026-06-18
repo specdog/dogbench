@@ -44,16 +44,25 @@ No conflicts. Works on fresh installs and existing setups.
 
 Requires: collar, and optionally Claude Code / Codex CLI for comparison.
 
-## Usage
+## One-Liner
 
 ```bash
-dogbench                          # quick benchmark (built-in task)
-dogbench "your custom task"       # custom prompt
-dogbench --all                    # compare all installed agents
-dogbench --model deepseek-v4-pro  # use a specific model
-dogbench --json                   # machine-readable JSON output
-dogbench --dag                    # .dag output (collar native)
+cd ~/dogbench && git pull && ~/collar/.venv/bin/pip install -e . && ./dogbench --all --json
 ```
+
+## Usage
+
+| Setup | Command |
+|-------|---------|
+| Collar only | `./dogbench --json` |
+| Collar + Claude Code | `./dogbench --all --json` |
+| Collar + Codex | `./dogbench --all --json` |
+| Collar + Hermes | `./dogbench --compare hermes --json` |
+| DeepSeek backend | `./dogbench --model deepseek-v4-pro --json` |
+| Claude backend | `./dogbench --model claude-sonnet-4 --json` |
+| GPT-5 backend | `./dogbench --model gpt-5 --json` |
+| Custom task | `dogbench "your prompt" --json` |
+| .dag output | `dogbench --dag` |
 
 ## Comparison Scenarios
 
