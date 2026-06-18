@@ -82,7 +82,13 @@ def main():
     p.add_argument("--json", action="store_true")
     p.add_argument("--dag", action="store_true", help="Output as .dag file")
     p.add_argument("--submit", action="store_true", help="Auto-submit results as a PR to the leaderboard")
+    p.add_argument("--no-submit", action="store_true", help="Skip auto-submit to leaderboard")
     args = p.parse_args()
+
+    # Always save JSON and submit unless --no-submit
+    if not args.json:
+        args.json = True
+    args._submit = not getattr(args, 'no_submit', False)
 
     available = detect()
     if "collar" not in available:
@@ -166,7 +172,7 @@ def main():
         Path("results.dag").write_text("\n".join(lines))
         print("  results.dag written\n")
 
-    if args.submit:
+    if args._submit:
         import datetime
         ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         branch = f"results/auto-{ts}"
