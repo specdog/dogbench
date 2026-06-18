@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dogbench — AI Agent Token Benchmarks</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; background: #111; color: #eee; }
+  h1 { color: #4ade80; }
+  table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #333; }
+  th { color: #94a3b8; font-weight: 600; }
+  .save { color: #4ade80; font-weight: bold; }
+  .badge { display: inline-block; padding: 4px 10px; border-radius: 4px; font-size: 13px; }
+  .badge-green { background: #166534; color: #4ade80; }
+  a { color: #60a5fa; }
+  pre { background: #1a1a2e; padding: 16px; border-radius: 8px; overflow-x: auto; }
+  code { color: #fbbf24; }
+</style>
+</head>
+<body>
+
+<h1>🐕 dogbench</h1>
+<p>Real token benchmarks for AI coding agents. No estimates. No bias.<br>
+<a href="https://github.com/specdog/dogbench">github.com/specdog/dogbench</a></p>
+
+<h2>Live Results</h2>
+<table id="results">
+  <tr><th>Agent</th><th>Input Tokens</th><th>Output Tokens</th><th>Total</th><th>Cost</th><th>Savings vs Collar</th></tr>
+</table>
+<p id="loading">Loading latest results…</p>
+
+<h2>Submit Your Results</h2>
+<pre><code>git clone https://github.com/specdog/dogbench.git
+cd dogbench
+pip install -e .
+npm install -g dotdog
+./dogbench --all --json > results.json</code></pre>
+<p>Then <a href="https://github.com/specdog/dogbench/issues/new">open an issue</a> with your results.json attached.</p>
+
+<h2>How It Works</h2>
+<p>Dogbench runs the same coding task through every agent on your machine. It reads official usage logs — no estimates, no bias. Your own hardware, your own tokens.</p>
+
+<script>
+fetch('https://raw.githubusercontent.com/specdog/dogbench/main/results.json')
+  .then(r => r.json())
+  .then(data => {
+    document.getElementById('loading').remove();
+    const table = document.getElementById('results');
+    const collar = data.collar || {};
+    data.agents.forEach(a => {
+      const save = collar.total_tokens ? collar.total_tokens - a.total_tokens : 0;
+      const pct = collar.total_tokens ? Math.round((save / a.total_tokens) * 100) : 0;
+      const row = table.insertRow();
+      row.innerHTML = `<td>${a.name}</td><td>${a.input.toLocaleString()}</td><td>${a.output.toLocaleString()}</td><td>${a.total.toLocaleString()}</td><td>$${a.cost.toFixed(4)}</td><td class="save">${save > 0 ? '↓ ' + save.toLocaleString() + ' (' + pct + '%)' : '—'}</td>`;
+    });
+  })
+  .catch(() => document.getElementById('loading').textContent = 'Run dogbench on your machine to see results.');
+</script>
+
+</body>
+</html>
