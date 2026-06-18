@@ -66,7 +66,7 @@
 <p>Dogbench runs the same coding task through every agent on your machine. It reads official usage logs — no estimates, no bias. Your own hardware, your own tokens.</p>
 
 <script>
-fetch('https://raw.githubusercontent.com/specdog/dogbench/main/results.json')
+fetch('results.json')
   .then(r => r.json())
   .then(data => {
     document.getElementById('loading').remove();
