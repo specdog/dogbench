@@ -1,1 +1,16 @@
-{"model": "deepseek-v4-pro", "results": {"collar": {"agent": "collar (DAG-first)", "input": 44878, "output": 699, "total": 45577, "time": 15.730374813079834, "cost": 0.023837}}}
+{
+  "model": "deepseek-v4-pro",
+  "agents": [
+    {
+      "name": "collar (DAG-first)",
+      "input": 44878,
+      "output": 699,
+      "total": 45577,
+      "time": 15.730374813079834,
+      "cost": 0.023837
+    }
+  ],
+  "collar": {
+    "total_tokens": 45577
+  }
+}
