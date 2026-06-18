@@ -34,12 +34,16 @@
 <p id="loading">Loading latest results…</p>
 
 <h2>Run on Your Machine</h2>
-<pre><code id="install-cmd">git clone https://github.com/specdog/dogbench.git 2>/dev/null || (cd dogbench && git pull)
-cd dogbench && pip install -e . 2>/dev/null || ~/collar/.venv/bin/pip install -e .
-which dotdog || npm install -g dotdog
-./dogbench --all --json > results.json && cat results.json</code></pre>
+<pre><code id="install-cmd">cd ~/dogbench && git pull && ~/collar/.venv/bin/pip install -e . && ./dogbench --all --json</code></pre>
 <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('install-cmd').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000)">📋 Copy</button>
-<p><small>No conflicts. Works on fresh installs and existing setups.</small></p>
+<p>Detects collar, Claude Code, and Codex automatically. Works with any model.</p>
+
+<h3>Other Setups</h3>
+<table>
+<tr><td>Collar only</td><td><code>./dogbench --json</code></td></tr>
+<tr><td>DeepSeek backend</td><td><code>./dogbench --model deepseek-v4-pro --json</code></td></tr>
+<tr><td>Claude backend</td><td><code>./dogbench --model claude-sonnet-4 --json</code></td></tr>
+</table>
 
 <h2>Submit Your Results</h2>
 <p>Then <a href="https://github.com/specdog/dogbench/issues/new">open an issue</a> with your results.json attached.</p>
