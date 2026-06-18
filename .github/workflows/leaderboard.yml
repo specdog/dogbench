@@ -16,14 +16,16 @@ jobs:
           with open('results.json') as f:
               data = json.load(f)
           assert 'model' in data, 'missing model'
-          assert 'results' in data, 'missing results'
-          for aid, r in data['results'].items():
-              assert 'agent' in r, f'{aid}: missing agent'
-              assert 'input' in r, f'{aid}: missing input'
-              assert 'output' in r, f'{aid}: missing output'
-              assert 'total' in r, f'{aid}: missing total'
-              assert 'cost' in r, f'{aid}: missing cost'
-          print(f'✓ Valid: {len(data[\"results\"])} agents, model={data[\"model\"]}')
+          assert 'agents' in data, 'missing agents'
+          for a in data['agents']:
+              assert 'name' in a, 'missing name'
+              assert 'input' in a, 'missing input'
+              assert 'output' in a, 'missing output'
+              assert 'total' in a, 'missing total'
+              assert 'cost' in a, 'missing cost'
+          assert 'collar' in data, 'missing collar'
+          assert 'total_tokens' in data['collar'], 'collar: missing total_tokens'
+          print(f'✓ Valid: {len(data[\"agents\"])} agents, model={data[\"model\"]}')
           "
   
   auto-approve:
