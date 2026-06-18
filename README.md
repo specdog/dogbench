@@ -48,7 +48,7 @@ Requires: collar, and optionally Claude Code / Codex CLI for comparison.
 ## One-Liner
 
 ```bash
-cd ~/dogbench && git pull origin feat/init && ~/collar/.venv/bin/pip install -e . && ./dogbench --all --json
+cd ~/dogbench && git pull origin main && ~/collar/.venv/bin/pip install -e . && ./dogbench --all --json
 ```
 
 ## Usage
