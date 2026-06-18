@@ -1,6 +1,6 @@
 # dogbench
 
-[![benchmark](https://img.shields.io/badge/collar%20saves-55%25%20tokens%20vs%20Claude%20Code-green)](https://github.com/specdog/dogbench)
+[![benchmark](https://img.shields.io/badge/collar%20saves-55%25%20tokens%20vs%20Claude%20Code-green)](benchmark.md)
 
 One command to prove collar saves tokens.
 
