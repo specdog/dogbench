@@ -29,11 +29,18 @@ Output:
 ## Install
 
 ```bash
-git clone https://github.com/specdog/dogbench.git
+# Clone (or pull if already cloned)
+git clone https://github.com/specdog/dogbench.git 2>/dev/null || (cd dogbench && git pull origin feat/init)
 cd dogbench
-pip install -e .
-npm install -g dotdog          # for .dag output
+
+# Install (use collar's venv if you have it)
+pip install -e . 2>/dev/null || ~/collar/.venv/bin/pip install -e .
+
+# Dotdog (skip if already installed)
+which dotdog || npm install -g dotdog
 ```
+
+No conflicts. Works on fresh installs and existing setups.
 
 Requires: collar, and optionally Claude Code / Codex CLI for comparison.
 
