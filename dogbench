@@ -1,152 +1,151 @@
-1|#!/usr/bin/env python3
-2|"""dogbench — one command to prove collar saves tokens."""
-3|import argparse, json, os, subprocess, sys, time
-4|from pathlib import Path
-5|
-6|SCRIPT_DIR = Path(__file__).resolve().parent
-7|DEFAULT_TASK = "Write a Python script that reads CSV sales data, groups by category, calculates revenue, and writes unit tests. Use standard library only."
-8|
-9|AGENTS = {
-10|    "collar": {"name": "collar (DAG-first)", "cmd": 'collar chat -q "{prompt}"', "color": "\033[32m"},
-11|    "claude": {"name": "Claude Code", "cmd": 'claude "{prompt}" --print', "color": "\033[34m"},
-12|    "codex":  {"name": "OpenAI Codex", "cmd": 'codex exec "{prompt}"', "color": "\033[35m"},
-13|}
-14|
-15|RATES = {"gpt-5": {"input": 1.25, "output": 10.0}, "claude": {"input": 3.0, "output": 15.0}, "default": {"input": 1.0, "output": 5.0}}
-16|
-17|def detect():
-18|    return [a for a, c in AGENTS.items() if subprocess.run(["which", c["cmd"].split()[0]], capture_output=True).returncode == 0]
-19|
-20|def count_tokens(agent_id):
-21|    home = Path.home()
-22|    if agent_id == "collar":
-23|        total_in = total_out = 0
-24|        sessions = home / ".dag" / "sessions"
-25|        if sessions.is_dir():
-26|            for f in sorted(sessions.glob("*.jsonl"), key=os.path.getmtime, reverse=True)[:3]:
-27|                try:
-28|                    for line in open(f):
-29|                        d = json.loads(line)
-30|                        u = d.get("usage", {})
-31|                        total_in += u.get("prompt_tokens", u.get("input_tokens", 0))
-32|                        total_out += u.get("completion_tokens", u.get("output_tokens", 0))
-33|                except: continue
-34|        return {"input": total_in, "output": total_out}
-35|    elif agent_id == "claude":
-36|        path = home / "Library" / "Application Support" / "Claude" / "usage"
-37|    elif agent_id == "codex":
-38|        path = home / ".codex" / "usage"
-39|    else:
-40|        return {"input": 0, "output": 0}
-41|    total_in = total_out = 0
-42|    if path.is_dir():
-43|        for f in sorted(path.glob("*.jsonl"), key=os.path.getmtime, reverse=True)[:5]:
-44|            try:
-45|                for line in open(f):
-46|                    d = json.loads(line)
-47|                    u = d.get("usage", {})
-48|                    total_in += u.get("input_tokens", u.get("prompt_tokens", 0))
-49|                    total_out += u.get("output_tokens", u.get("completion_tokens", 0))
-50|            except: continue
-51|    return {"input": total_in, "output": total_out}
-52|
-53|def fmt(n): return f"{n:,}" if n else "N/A"
-54|def cost(i, o, m="default"):
-55|    r = RATES.get(m, RATES["default"])
-56|    return (i/1e6)*r["input"] + (o/1e6)*r["output"]
-57|
-58|def main():
-59|    p = argparse.ArgumentParser()
-60|    p.add_argument("task", nargs="?", default=DEFAULT_TASK)
-61|    p.add_argument("--model", default="gpt-5")
-62|    p.add_argument("--compare", nargs="*", default=["claude", "codex"])
-63|    p.add_argument("--all", action="store_true")
-64|    p.add_argument("--json", action="store_true")
-65|    p.add_argument("--dag", action="store_true")
-66|    args = p.parse_args()
-67|
-68|    available = detect()
-69|    if "collar" not in available:
-70|        print("collar not installed"); sys.exit(1)
-71|
-72|    targets = ["collar"]
-73|    if args.all:
-74|        targets = [a for a in available if a != "collar"][:4]
-75|        targets.insert(0, "collar")
-76|    else:
-77|        for a in args.compare:
-78|            if a in available: targets.append(a)
-79|
-80|    print(f"\n\033[1m  dogbench\033[0m  {len(targets)} agents  model={args.model}\n")
-81|
-82|    results = {}
-83|    for aid in targets:
-84|        cfg = AGENTS[aid]
-85|        cmd = cfg["cmd"].replace("{prompt}", args.task)
-86|        print(f"  {cfg['name']} running...", end=" ", flush=True)
-87|        start = time.time()
-88|        try:
-89|            subprocess.run(cmd, shell=True, capture_output=True, timeout=300)
-90|            elapsed = time.time() - start
-91|            tokens = count_tokens(aid)
-92|            results[aid] = {"name": cfg["name"], "tokens": tokens, "time": elapsed, "error": None}
-93|            print(f"\033[32mOK\033[0m {elapsed:.0f}s")
-94|        except subprocess.TimeoutExpired:
-95|            results[aid] = {"name": cfg["name"], "tokens": {"input":0,"output":0}, "time":0, "error":"timeout"}
-96|            print("\033[31mTIMEOUT\033[0m")
-97|        except Exception as e:
-98|            results[aid] = {"name": cfg["name"], "tokens": {"input":0,"output":0}, "time":0, "error":str(e)}
-99|            print(f"\033[31mERR\033[0m")
-100|        time.sleep(2)
-101|
-102|    print("\n  Agent                Input     Output      Cost")
-103|    print("  " + "-" * 55)
-104|    cd = results.get("collar", {}).get("tokens", {})
-105|    ct = cd.get("input",0) + cd.get("output",0)
-106|
-107|    for aid in targets:
-108|        r = results.get(aid, {})
-109|        name = r.get("name", aid)
-110|        tok = r.get("tokens", {})
-111|        inp, out = tok.get("input",0), tok.get("output",0)
-112|        c = cost(inp, out, args.model)
-113|        color = AGENTS.get(aid,{}).get("color","")
-114|        if r.get("error"):
-115|            print(f"  {color}{name:<20s}  {'ERROR':>8s}  {'':>8s}  {'':>7s}\033[0m")
-116|        elif inp == 0:
-117|            print(f"  {color}{name:<20s}  {'N/A':>8s}  {'N/A':>8s}  {'N/A':>7s}\033[0m")
-118|        else:
-119|            print(f"  {color}{name:<20s}  {fmt(inp):>8s}  {fmt(out):>8s}  ${c:>6.4f}\033[0m")
-120|    print()
-121|
-122|    if ct > 0:
-123|        for aid in targets[1:]:
-124|            r = results.get(aid, {})
-125|            tt = r.get("tokens", {}).get("input",0) + r.get("tokens", {}).get("output",0)
-126|            if tt > 0:
-127|                saved = tt - ct
-128|                pct = (saved/tt)*100
-129|                if saved > 0:
-130|                    print(f"  \033[1;32mCollar saved {fmt(saved)} tokens ({pct:.0f}%) vs {r['name']}\033[0m")
-131|                    print(f"    \033[1;32m${cost(cd.get('input',0),cd.get('output',0),args.model) - cost(r['tokens'].get('input',0),r['tokens'].get('output',0),args.model):.4f}\033[0m saved\n")
-132|
-133|    if args.json:
-134|        out = {"model": args.model, "results": {}}
-135|        for aid in targets:
-136|            r = results.get(aid, {})
-137|            t = r.get("tokens", {})
-138|            out["results"][aid] = {"agent": r["name"], "input": t["input"], "output": t["output"], "total": t["input"]+t["output"], "time": r["time"], "cost": cost(t["input"],t["output"],args.model)}
-139|        print(json.dumps(out, indent=2))
-140|
-141|    if args.dag:
-142|        lines = ["[dogbench-results]"]
-143|        for aid in targets:
-144|            r = results.get(aid, {})
-145|            t = r.get("tokens", {})
-146|            lines.append(f"{aid}-> tokens:{t['input']+t['output']}(11), cost:{cost(t['input'],t['output'],args.model):.5f}(11)")
-147|        Path("results.dag").write_text("\n".join(lines))
-148|        print("  results.dag written\n")
-149|
-150|if __name__ == "__main__":
-151|    main()
-152|
+#!/usr/bin/env python3
+"""dogbench — one command to prove collar saves tokens."""
+import argparse, json, os, subprocess, sys, time
+from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+DEFAULT_TASK = "Write a Python script that reads CSV sales data, groups by category, calculates revenue, and writes unit tests. Use standard library only."
+
+AGENTS = {
+    "collar": {"name": "collar (DAG-first)", "cmd": 'collar chat -q "{prompt}"', "color": "\033[32m"},
+    "claude": {"name": "Claude Code", "cmd": 'claude "{prompt}" --print', "color": "\033[34m"},
+    "codex":  {"name": "OpenAI Codex", "cmd": 'codex exec "{prompt}"', "color": "\033[35m"},
+}
+
+RATES = {"gpt-5": {"input": 1.25, "output": 10.0}, "claude": {"input": 3.0, "output": 15.0}, "default": {"input": 1.0, "output": 5.0}}
+
+def detect():
+    return [a for a, c in AGENTS.items() if subprocess.run(["which", c["cmd"].split()[0]], capture_output=True).returncode == 0]
+
+def count_tokens(agent_id):
+    home = Path.home()
+    if agent_id == "collar":
+        total_in = total_out = 0
+        sessions = home / ".dag" / "sessions"
+        if sessions.is_dir():
+            for f in sorted(sessions.glob("*.jsonl"), key=os.path.getmtime, reverse=True)[:3]:
+                try:
+                    for line in open(f):
+                        d = json.loads(line)
+                        u = d.get("usage", {})
+                        total_in += u.get("prompt_tokens", u.get("input_tokens", 0))
+                        total_out += u.get("completion_tokens", u.get("output_tokens", 0))
+                except: continue
+        return {"input": total_in, "output": total_out}
+    elif agent_id == "claude":
+        path = home / "Library" / "Application Support" / "Claude" / "usage"
+    elif agent_id == "codex":
+        path = home / ".codex" / "usage"
+    else:
+        return {"input": 0, "output": 0}
+    total_in = total_out = 0
+    if path.is_dir():
+        for f in sorted(path.glob("*.jsonl"), key=os.path.getmtime, reverse=True)[:5]:
+            try:
+                for line in open(f):
+                    d = json.loads(line)
+                    u = d.get("usage", {})
+                    total_in += u.get("input_tokens", u.get("prompt_tokens", 0))
+                    total_out += u.get("output_tokens", u.get("completion_tokens", 0))
+            except: continue
+    return {"input": total_in, "output": total_out}
+
+def fmt(n): return f"{n:,}" if n else "N/A"
+def cost(i, o, m="default"):
+    r = RATES.get(m, RATES["default"])
+    return (i/1e6)*r["input"] + (o/1e6)*r["output"]
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("task", nargs="?", default=DEFAULT_TASK)
+    p.add_argument("--model", default="gpt-5")
+    p.add_argument("--compare", nargs="*", default=["claude", "codex"])
+    p.add_argument("--all", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--dag", action="store_true")
+    args = p.parse_args()
+
+    available = detect()
+    if "collar" not in available:
+        print("collar not installed"); sys.exit(1)
+
+    targets = ["collar"]
+    if args.all:
+        targets = [a for a in available if a != "collar"][:4]
+        targets.insert(0, "collar")
+    else:
+        for a in args.compare:
+            if a in available: targets.append(a)
+
+    print(f"\n\033[1m  dogbench\033[0m  {len(targets)} agents  model={args.model}\n")
+
+    results = {}
+    for aid in targets:
+        cfg = AGENTS[aid]
+        cmd = cfg["cmd"].replace("{prompt}", args.task)
+        print(f"  {cfg['name']} running...", end=" ", flush=True)
+        start = time.time()
+        try:
+            subprocess.run(cmd, shell=True, capture_output=True, timeout=300)
+            elapsed = time.time() - start
+            tokens = count_tokens(aid)
+            results[aid] = {"name": cfg["name"], "tokens": tokens, "time": elapsed, "error": None}
+            print(f"\033[32mOK\033[0m {elapsed:.0f}s")
+        except subprocess.TimeoutExpired:
+            results[aid] = {"name": cfg["name"], "tokens": {"input":0,"output":0}, "time":0, "error":"timeout"}
+            print("\033[31mTIMEOUT\033[0m")
+        except Exception as e:
+            results[aid] = {"name": cfg["name"], "tokens": {"input":0,"output":0}, "time":0, "error":str(e)}
+            print(f"\033[31mERR\033[0m")
+        time.sleep(2)
+
+    print("\n  Agent                Input     Output      Cost")
+    print("  " + "-" * 55)
+    cd = results.get("collar", {}).get("tokens", {})
+    ct = cd.get("input",0) + cd.get("output",0)
+
+    for aid in targets:
+        r = results.get(aid, {})
+        name = r.get("name", aid)
+        tok = r.get("tokens", {})
+        inp, out = tok.get("input",0), tok.get("output",0)
+        c = cost(inp, out, args.model)
+        color = AGENTS.get(aid,{}).get("color","")
+        if r.get("error"):
+            print(f"  {color}{name:<20s}  {'ERROR':>8s}  {'':>8s}  {'':>7s}\033[0m")
+        elif inp == 0:
+            print(f"  {color}{name:<20s}  {'N/A':>8s}  {'N/A':>8s}  {'N/A':>7s}\033[0m")
+        else:
+            print(f"  {color}{name:<20s}  {fmt(inp):>8s}  {fmt(out):>8s}  ${c:>6.4f}\033[0m")
+    print()
+
+    if ct > 0:
+        for aid in targets[1:]:
+            r = results.get(aid, {})
+            tt = r.get("tokens", {}).get("input",0) + r.get("tokens", {}).get("output",0)
+            if tt > 0:
+                saved = tt - ct
+                pct = (saved/tt)*100
+                if saved > 0:
+                    print(f"  \033[1;32mCollar saved {fmt(saved)} tokens ({pct:.0f}%) vs {r['name']}\033[0m")
+                    print(f"    \033[1;32m${cost(cd.get('input',0),cd.get('output',0),args.model) - cost(r['tokens'].get('input',0),r['tokens'].get('output',0),args.model):.4f}\033[0m saved\n")
+
+    if args.json:
+        out = {"model": args.model, "results": {}}
+        for aid in targets:
+            r = results.get(aid, {})
+            t = r.get("tokens", {})
+            out["results"][aid] = {"agent": r["name"], "input": t["input"], "output": t["output"], "total": t["input"]+t["output"], "time": r["time"], "cost": cost(t["input"],t["output"],args.model)}
+        print(json.dumps(out, indent=2))
+
+    if args.dag:
+        lines = ["[dogbench-results]"]
+        for aid in targets:
+            r = results.get(aid, {})
+            t = r.get("tokens", {})
+            lines.append(f"{aid}-> tokens:{t['input']+t['output']}(11), cost:{cost(t['input'],t['output'],args.model):.5f}(11)")
+        Path("results.dag").write_text("\n".join(lines))
+        print("  results.dag written\n")
+
+if __name__ == "__main__":
+    main()

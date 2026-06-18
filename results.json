@@ -1,0 +1,22 @@
+
+[1m  dogbench[0m  1 agents  model=gpt-5
+
+  collar (DAG-first) running... [32mOK[0m 56s
+
+  Agent                Input     Output      Cost
+  -------------------------------------------------------
+  [32mcollar (DAG-first)         N/A       N/A      N/A[0m
+
+{
+  "model": "gpt-5",
+  "results": {
+    "collar": {
+      "agent": "collar (DAG-first)",
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "time": 55.635668992996216,
+      "cost": 0.0
+    }
+  }
+}

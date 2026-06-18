@@ -1,5 +1,6 @@
 # dogbench
 
+[![semver](https://img.shields.io/badge/semver-0.1.0-blue)](https://semver.org)
 [![benchmark](https://img.shields.io/badge/live%20results-specdog.github.io/dogbench-green)](https://specdog.github.io/dogbench/)
 
 One command to prove collar saves tokens.

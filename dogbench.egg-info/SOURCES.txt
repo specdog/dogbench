@@ -1,0 +1,11 @@
+README.md
+dogbench
+setup.py
+telemetry.py
+dogbench.egg-info/PKG-INFO
+dogbench.egg-info/SOURCES.txt
+dogbench.egg-info/dependency_links.txt
+dogbench.egg-info/requires.txt
+dogbench.egg-info/top_level.txt
+dogbench_pkg/__init__.py
+dogbench_pkg/telemetry.py
