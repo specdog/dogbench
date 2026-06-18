@@ -52,3 +52,19 @@ dogbench --model deepseek-v4-pro  # use a specific model
 4. Outputs a clean comparison table with savings
 
 No estimates. No bias. Your own machine, your own tokens.
+
+## Add Your Own Agent
+
+Edit `agents.yaml`:
+
+```yaml
+agents:
+  my-agent:
+    name: "My Agent"
+    command: 'my-agent-cli "{prompt}"'
+    log_type: jsonl
+    log_path: "~/path/to/usage/*.jsonl"
+    log_key: "usage.total_tokens"
+```
+
+PRs welcome. Any CLI tool that accepts a prompt and writes usage logs can be benchmarked.
