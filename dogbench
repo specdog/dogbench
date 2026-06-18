@@ -11,11 +11,11 @@ DEFAULT_TASK = (
 )
 
 AGENTS = {
-    "collar": {"name": "collar (DAG-first)", "cmd": 'collar chat -q "{prompt}"', "color": "\033[32m"},
-    "hermes": {"name": "Hermes (upstream)",  "cmd": 'hermes chat -q "{prompt}"', "color": "\033[36m"},
-    "claude": {"name": "Claude Code",        "cmd": 'claude "{prompt}" --print', "color": "\033[34m"},
-    "codex":  {"name": "OpenAI Codex",        "cmd": 'codex exec "{prompt}"',   "color": "\033[35m"},
-    "api":    {"name": "API (raw)",           "cmd": None,                      "color": "\033[33m"},
+    "collar":  {"name": "collar + dotdog (DAG-first)", "cmd": 'collar chat -q "{prompt}"', "color": "\033[32m"},
+    "hermes":  {"name": "hermes (upstream, no DAG)",    "cmd": 'hermes chat -q "{prompt}"', "color": "\033[36m"},
+    "claude":  {"name": "Claude Code",                  "cmd": 'claude "{prompt}" --print', "color": "\033[34m"},
+    "codex":   {"name": "OpenAI Codex",                  "cmd": 'codex exec "{prompt}"',   "color": "\033[35m"},
+    "api":     {"name": "DeepSeek API (raw, no tools)",  "cmd": None,                      "color": "\033[33m"},
 }
 
 RATES = {
@@ -48,15 +48,12 @@ def detect_model():
     return m if isinstance(m, str) and m else "deepseek-v4-pro"
 
 def get_api_credentials():
-    """Return (api_key, base_url) or (None, None)."""
     d = _read_collar_config()
     m = d.get("model", {})
     provider = m.get("provider", "deepseek") if isinstance(m, dict) else "deepseek"
     base_url = m.get("base_url", "https://api.deepseek.com/v1") if isinstance(m, dict) else "https://api.deepseek.com/v1"
-
     env_map = {"deepseek": "DEEPSEEK_API_KEY", "openai": "OPENAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
     api_key = os.environ.get(env_map.get(provider, ""))
-
     if not api_key:
         providers = d.get("providers", {})
         if provider in providers and isinstance(providers[provider], dict):
@@ -68,8 +65,7 @@ def call_raw_api(task, model):
     import urllib.request
     api_key, base_url = get_api_credentials()
     if not api_key:
-        raise RuntimeError("no API key — set DEEPSEEK_API_KEY or OPENAI_API_KEY")
-
+        raise RuntimeError("no API key — set DEEPSEEK_API_KEY")
     payload = json.dumps({
         "model": model,
         "messages": [{"role": "user", "content": task}],
@@ -88,8 +84,8 @@ def detect():
         exe = cfg["cmd"].split()[0]
         if subprocess.run(["which", exe], capture_output=True).returncode == 0:
             available.append(aid)
-    if get_api_credentials()[0]:
-        available.append("api")
+    # api is always available (real or estimated)
+    available.append("api")
     return available
 
 def count_tokens(agent_id, session_id=None):
@@ -102,7 +98,6 @@ def count_tokens(agent_id, session_id=None):
         if not db_path.exists():
             return {"input": 0, "output": 0}
         import sqlite3
-        # Wait up to 30s for async token write
         for _ in range(30):
             try:
                 conn = sqlite3.connect(str(db_path))
@@ -154,13 +149,13 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("task", nargs="?", default=DEFAULT_TASK)
     p.add_argument("--model", default=detect_model())
-    p.add_argument("--compare", nargs="*", default=["hermes", "claude", "codex"])
+    p.add_argument("--compare", nargs="*", default=["hermes", "api"])
     p.add_argument("--all", action="store_true")
-    p.add_argument("--raw", action="store_true", help="Include raw API (needs API key)")
     p.add_argument("--json", action="store_true")
     p.add_argument("--dag", action="store_true")
     p.add_argument("--submit", action="store_true")
     p.add_argument("--no-submit", action="store_true")
+    p.add_argument("--no-api", action="store_true", help="Skip raw API (even estimated)")
     args = p.parse_args()
 
     if not args.json:
@@ -171,6 +166,8 @@ def main():
     if "collar" not in available:
         print("collar not installed"); sys.exit(1)
 
+    has_real_api = bool(get_api_credentials()[0])
+
     targets = ["collar"]
     if args.all:
         for a in available:
@@ -179,11 +176,10 @@ def main():
                 if len(targets) >= 5: break
     else:
         for a in args.compare:
+            if a == "api" and args.no_api:
+                continue
             if a in available and a not in targets:
                 targets.append(a)
-
-    if args.raw and "api" in available and "api" not in targets:
-        targets.append("api")
 
     task_tokens = estimate_tokens(args.task)
     ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -196,27 +192,33 @@ def main():
 
         # ── raw API ──
         if aid == "api":
-            print(f"  {cfg['name']} running...", end=" ", flush=True)
+            print(f"  {cfg['name']}…", end=" ", flush=True)
             start = time.time()
-            try:
-                tokens = call_raw_api(args.task, args.model)
-                elapsed = time.time() - start
-                results[aid] = {"name": cfg["name"], "tokens": tokens, "time": elapsed, "error": None}
-                print(f"\033[32mOK\033[0m {elapsed:.0f}s")
-            except Exception as e:
-                results[aid] = {"name": cfg["name"], "tokens": {"input":0,"output":0}, "time":0, "error": str(e)}
-                print(f"\033[31mERR\033[0m {e}")
+            if has_real_api:
+                try:
+                    tokens = call_raw_api(args.task, args.model)
+                    elapsed = time.time() - start
+                    results[aid] = {"name": cfg["name"], "tokens": tokens, "time": elapsed, "error": None, "estimated": False}
+                    print(f"\033[32mOK\033[0m {elapsed:.0f}s")
+                except Exception as e:
+                    results[aid] = {"name": cfg["name"], "tokens": {"input":0,"output":0}, "time":0, "error": str(e), "estimated": False}
+                    print(f"\033[31mERR\033[0m {e}")
+            else:
+                # Estimated baseline: prompt tokens + ~2× for output
+                est_in = task_tokens
+                est_out = task_tokens * 2
+                results[aid] = {"name": cfg["name"] + " (est.)", "tokens": {"input": est_in, "output": est_out}, "time": 0.0, "error": None, "estimated": True}
+                print(f"\033[33mEST\033[0m")
             time.sleep(1)
             continue
 
         # ── CLI agent ──
         cmd = cfg["cmd"].replace("{prompt}", args.task)
-        print(f"  {cfg['name']} running...", end=" ", flush=True)
+        print(f"  {cfg['name']}…", end=" ", flush=True)
         start = time.time()
         try:
             proc = subprocess.run(cmd, shell=True, capture_output=True, timeout=300)
             elapsed = time.time() - start
-            # Parse session ID from stderr (collar prints "Session: 20260618_...")
             sid = None
             out = (proc.stderr + proc.stdout).decode(errors="replace")
             for line in out.splitlines():
@@ -224,22 +226,21 @@ def main():
                     sid = line.split("Session:")[-1].strip().split()[0]
                     break
             tokens = count_tokens(aid, session_id=sid)
-            results[aid] = {"name": cfg["name"], "tokens": tokens, "time": elapsed, "error": None if tokens["input"] > 0 else "no tokens recorded"}
-            if tokens["input"] > 0:
-                print(f"\033[32mOK\033[0m {elapsed:.0f}s")
-            else:
-                print(f"\033[33mTOK?\033[0m {elapsed:.0f}s")
+            ok = tokens["input"] > 0
+            results[aid] = {"name": cfg["name"], "tokens": tokens, "time": elapsed,
+                           "error": None if ok else "no tokens recorded", "estimated": False}
+            print(f"\033[32mOK\033[0m {elapsed:.0f}s" if ok else f"\033[33mTOK?\033[0m {elapsed:.0f}s")
         except subprocess.TimeoutExpired:
-            results[aid] = {"name": cfg["name"], "tokens": {"input":0,"output":0}, "time":0, "error":"timeout"}
+            results[aid] = {"name": cfg["name"], "tokens": {"input":0,"output":0}, "time":0, "error":"timeout", "estimated": False}
             print("\033[31mTIMEOUT\033[0m")
         except Exception as e:
-            results[aid] = {"name": cfg["name"], "tokens": {"input":0,"output":0}, "time":0, "error":str(e)}
+            results[aid] = {"name": cfg["name"], "tokens": {"input":0,"output":0}, "time":0, "error":str(e), "estimated": False}
             print(f"\033[31mERR\033[0m")
         time.sleep(2)
 
     # ── table ──
-    print("\n  Agent                Input     Output      Cost    Overhead")
-    print("  " + "-" * 68)
+    print("\n  Agent                                Input     Output      Cost    Overhead")
+    print("  " + "-" * 78)
     cd = results.get("collar", {}).get("tokens", {})
     ct = cd.get("input", 0) + cd.get("output", 0)
 
@@ -250,13 +251,14 @@ def main():
         inp, out = tok.get("input", 0), tok.get("output", 0)
         c = cost(inp, out, args.model)
         color = AGENTS.get(aid, {}).get("color", "")
+        est = " ⚡" if r.get("estimated") else ""
         oh = f"{inp // task_tokens}×" if task_tokens and inp else "—"
         if r.get("error"):
-            print(f"  {color}{name:<20s}  {'ERROR':>8s}  {'':>8s}  {'':>7s}  {'':>8s}\033[0m")
+            print(f"  {color}{name:<35s}  {'ERROR':>8s}  {'':>8s}  {'':>7s}  {'':>8s}\033[0m")
         elif inp == 0:
-            print(f"  {color}{name:<20s}  {'N/A':>8s}  {'N/A':>8s}  {'N/A':>7s}  {'N/A':>7s}\033[0m")
+            print(f"  {color}{name:<35s}  {'N/A':>8s}  {'N/A':>8s}  {'N/A':>7s}  {'N/A':>7s}\033[0m")
         else:
-            print(f"  {color}{name:<20s}  {fmt(inp):>8s}  {fmt(out):>8s}  ${c:>6.4f}  {oh:>8s}\033[0m")
+            print(f"  {color}{name:<35s}  {fmt(inp):>8s}  {fmt(out):>8s}  ${c:>6.4f}  {oh:>8s}{est}\033[0m")
     print()
 
     # ── savings ──
@@ -268,7 +270,8 @@ def main():
                 saved = tt - ct
                 pct = (saved / tt) * 100
                 if saved > 0:
-                    print(f"  \033[1;32mCollar saved {fmt(saved)} tokens ({pct:.0f}%) vs {r['name']}\033[0m")
+                    tag = " (est.)" if r.get("estimated") else ""
+                    print(f"  \033[1;32mCollar saved {fmt(saved)} tokens ({pct:.0f}%) vs {r['name']}{tag}\033[0m")
                     print(f"    \033[1;32m${cost(cd['input'],cd['output'],args.model):.6f} vs ${cost(r['tokens']['input'],r['tokens']['output'],args.model):.6f}\033[0m\n")
                 elif saved < 0:
                     print(f"  \033[1;31mCollar used {fmt(-saved)} more tokens ({-pct:.0f}%) vs {r['name']}\033[0m\n")
@@ -291,6 +294,7 @@ def main():
                 "total": total,
                 "time": round(r["time"], 1),
                 "cost": round(cost(t["input"], t["output"], args.model), 6),
+                "estimated": r.get("estimated", False),
             }
             agents_out.append(entry)
             if aid == "collar":
@@ -305,17 +309,15 @@ def main():
             "collar": {"total_tokens": collar_total},
         }
 
-        # ── append to history ──
         history_path = SCRIPT_DIR / "results.json"
         history = []
         if history_path.exists():
             try:
                 history = json.loads(history_path.read_text())
                 if not isinstance(history, list):
-                    history = [history]  # migrate old single-object format
+                    history = [history]
             except: pass
         history.append(run)
-        # keep last 20
         if len(history) > 20:
             history = history[-20:]
         history_path.write_text(json.dumps(history, indent=2))
@@ -332,7 +334,6 @@ def main():
         Path("results.dag").write_text("\n".join(lines))
         print("  results.dag written\n")
 
-    # ── auto-submit ──
     if args._submit:
         branch = f"results/auto-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}"
         subprocess.run(["git", "checkout", "-b", branch], cwd=SCRIPT_DIR, capture_output=True)
@@ -346,7 +347,6 @@ def main():
                   "--body", f"Automated benchmark submission.\n\n```json\n{json.dumps(run, indent=2)}\n```"],
                   cwd=SCRIPT_DIR, capture_output=True, text=True)
             print(f"\n  \033[32m✓ PR submitted: {pr.stdout.strip()}\033[0m")
-            print(f"  View at https://specdog.github.io/dogbench/")
         else:
             print(f"\n  \033[33m⚠ push failed — create PR manually:\033[0m")
             print(f"  gh pr create --repo specdog/dogbench --head {branch}")

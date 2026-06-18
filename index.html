@@ -133,9 +133,11 @@ fetch('results.json')
 
     latest.agents.forEach(a => {
       const isCollar = a.agent_id === 'collar';
+      const isEst = a.estimated;
       const save = collarTotal - a.total;
       const savePct = pct(save, a.total);
       const overhead = taskTokens && a.input ? Math.round(a.input / taskTokens) + '×' : '—';
+      const estTag = isEst ? ' ⚡' : '';
 
       let vs = '—';
       if (!isCollar && a.total > 0) {
@@ -149,10 +151,12 @@ fetch('results.json')
       const barCls = isCollar ? 'bar-collar' : 'bar-other';
 
       const row = tbl.insertRow();
-      row.innerHTML = `<td>${a.name}</td>
-        <td>${fmt(a.input)}</td><td>${fmt(a.output)}</td>
-        <td>${fmt(a.total)}<div class="bar-wrap"><div class="${barCls}" style="width:${barPct}%"></div></div></td>
-        <td>$${a.cost.toFixed(6)}</td><td>${overhead}</td><td>${vs}</td>`;
+      row.innerHTML = `<td>${a.name}${estTag}</td>
+        <td>${isEst ? '~'+fmt(a.input) : fmt(a.input)}</td>
+        <td>${isEst ? '~'+fmt(a.output) : fmt(a.output)}</td>
+        <td>${isEst ? '~'+fmt(a.total) : fmt(a.total)}<div class="bar-wrap"><div class="${barCls}" style="width:${barPct}%"></div></div></td>
+        <td>${isEst ? '≤$'+a.cost.toFixed(6) : '$'+a.cost.toFixed(6)}</td>
+        <td>${overhead}</td><td>${vs}</td>`;
     });
 
     // ── hero savings ──
