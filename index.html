@@ -52,18 +52,19 @@ fetch('results.json')
     var task = latest.task_tokens || 0;
     var model = latest.model || '';
 
-    // Find cheapest and most expensive
-    var sorted = latest.agents.slice().sort(function(a,b){return a.total - b.total});
-    var cheapest = sorted[0];
-    var expensive = sorted[sorted.length-1];
+    // Find cheapest and most expensive (exclude 0-token entries)
+    var valid = latest.agents.filter(function(a){return a.total > 0});
+    var sorted = valid.slice().sort(function(a,b){return a.total - b.total});
+    var cheapest = sorted.length ? sorted[0] : null;
+    var expensive = sorted.length ? sorted[sorted.length-1] : null;
 
     var tbl = document.getElementById('results');
     var max = 0;
     latest.agents.forEach(function(a){if(a.total > max) max = a.total});
 
     latest.agents.forEach(function(a){
-      var isCheapest = a.id === cheapest.id;
-      var isExpensive = a.id === expensive.id && sorted.length > 1;
+      var isCheapest = cheapest && a.id === cheapest.id;
+      var isExpensive = expensive && a.id === expensive.id && sorted.length > 1;
       var oh = task && a.input ? Math.round(a.input/task) + 'x' : '-';
       var barPct = max ? Math.round(a.total/max*100) : 0;
       var barColor = isCheapest ? '#4ade80' : isExpensive ? '#ef4444' : '#475569';
