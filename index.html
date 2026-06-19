@@ -219,7 +219,7 @@ function showTab(name) {
 }
 
 // ── load ──
-fetch('results.json?_=' + Date.now())
+fetch('results.json?v=2')
   .then(r => r.json())
   .then(raw => {
     const history = Array.isArray(raw) ? raw : [raw];
