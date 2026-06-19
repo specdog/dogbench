@@ -36,6 +36,23 @@
 
 <p id="meta" class="muted"></p>
 
+<h2>Guide</h2>
+<div class="card" style="background:#1a1a2e;border-radius:8px;padding:16px 20px;margin:12px 0">
+<h3 style="margin:0 0 8px;color:#e2e8f0">Run on your machine</h3>
+<pre style="background:#0f172a;padding:12px;border-radius:6px;margin:0"><code>cd ~/dogbench && git pull origin main && ./dogbench</code></pre>
+<p class="muted">4 agents tested: hermes, hermes+dotdog, collar, collar+dotdog</p>
+</div>
+
+<div class="card" style="background:#1a1a2e;border-radius:8px;padding:16px 20px;margin:12px 0">
+<h3 style="margin:0 0 8px;color:#e2e8f0">Single agent test</h3>
+<pre style="background:#0f172a;padding:12px;border-radius:6px;margin:0"><code>hermes chat -q "What npm package name and version does this project's package.json declare? Answer with just: name version"</code></pre>
+</div>
+
+<div class="card" style="background:#1a1a2e;border-radius:8px;padding:16px 20px;margin:12px 0">
+<h3 style="margin:0 0 8px;color:#e2e8f0">Add tests</h3>
+<p class="muted">Drop <code>.json</code> files in <a href="https://github.com/specdog/dogbench/tree/main/tests">tests/</a> with <code>id</code>, <code>task</code>, and comma-separated <code>ground</code> keywords.</p>
+</div>
+
 <footer>
   <a href="https://github.com/specdog">specdog</a> · 
   <a href="https://github.com/specdog/dotdog">dotdog</a> · 
