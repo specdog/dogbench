@@ -12,12 +12,13 @@ DEFAULT_TASK = (
 )
 
 AGENTS = {
-    "collar":     ("collar",              'collar chat -q "{prompt}"',   SCRIPT_DIR),
+    "collar":     ("collar + dotdog",     'collar chat -q "{prompt}"',   SCRIPT_DIR),
+    "collarnodog":("collar (no dotdog)",  'collar chat -q "{prompt}"',   TMPDIR),
     "hermes_dag": ("hermes + dotdog",     'hermes chat -q "{prompt}"',   SCRIPT_DIR),
     "hermes":     ("hermes (no dotdog)",  'hermes chat -q "{prompt}"',   TMPDIR),
 }
 
-COLORS = ["\033[32m", "\033[35m", "\033[36m"]
+COLORS = ["\033[32m", "\033[33m", "\033[35m", "\033[36m"]
 
 RATES = {
     "deepseek-v4-pro": {"input": 0.50, "output": 2.00},
