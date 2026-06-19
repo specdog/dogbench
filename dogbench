@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""dogbench — collar vs hermes, with and without DAG."""
+"""dogbench — real token benchmarks. Collar vs everyone else."""
 import argparse, datetime, json, os, subprocess, sys, time
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-TMPDIR = Path("/tmp")
 DEFAULT_TASK = (
     "In the specdog/dogbench project: what agents does dogbench support, "
     "what is the benchmark flow, and what does it measure? "
@@ -12,186 +11,368 @@ DEFAULT_TASK = (
 )
 
 AGENTS = {
-    "collar_dag":   ("collar + DAG",     'collar chat -q "{prompt}"',   SCRIPT_DIR),
-    "collar_nodag": ("collar (no DAG)",  'collar chat -q "{prompt}"',   TMPDIR),
-    "hermes_dag":   ("hermes + specs",   'hermes chat -q "{prompt}"',   SCRIPT_DIR),
-    "hermes_nodag": ("hermes (no DAG)",  'hermes chat -q "{prompt}"',   TMPDIR),
+    "collar":  {"name": "collar + dotdog (DAG)",     "cmd": 'collar chat -q "{prompt}"',   "color": "\033[32m", "cwd": None},
+    "collar_nodag": {"name": "collar (no DAG)",      "cmd": 'collar chat -q "{prompt}" --ignore-rules', "color": "\033[33m", "cwd": "/tmp"},
+    "hermes":  {"name": "hermes (no DAG)",            "cmd": 'hermes chat -q "{prompt}"',   "color": "\033[36m", "cwd": "/tmp"},
+    "hermes_dag":  {"name": "hermes + specs",         "cmd": 'hermes chat -q "{prompt}"',   "color": "\033[35m", "cwd": None},
+    "claude":  {"name": "Claude Code",                "cmd": 'claude "{prompt}" --print',   "color": "\033[34m", "cwd": None},
+    "codex":   {"name": "OpenAI Codex",               "cmd": 'codex exec "{prompt}"',       "color": "\033[35m", "cwd": None},
+    "api":     {"name": "DeepSeek API (raw, no tools)","cmd": None,                         "color": "\033[33m", "cwd": None},
 }
-
-COLORS = ["\033[32m", "\033[33m", "\033[35m", "\033[36m"]
 
 RATES = {
-    "deepseek-v4-pro": {"input": 0.50, "output": 2.00},
-    "gpt-5":           {"input": 1.25, "output": 10.0},
-    "claude-sonnet-4": {"input": 3.00, "output": 15.0},
-    "default":         {"input": 1.00, "output":  5.0},
+    "deepseek-v4-pro":  {"input": 0.50, "output": 2.00},
+    "gpt-5":            {"input": 1.25, "output": 10.0},
+    "claude-sonnet-4":  {"input": 3.00, "output": 15.0},
+    "default":          {"input": 1.00, "output":  5.0},
 }
 
-def detect_model():
+# ── helpers ──────────────────────────────────────────────────────────
+
+def estimate_tokens(text):
+    return max(1, len(text) // 4)
+
+def _read_collar_config():
     cfg = Path.home() / ".dag" / "config.yaml"
     if cfg.exists():
         try:
             import yaml
-            with open(cfg) as f: d = yaml.safe_load(f) or {}
-            m = d.get("model", {})
-            if isinstance(m, dict): return m.get("default", "deepseek-v4-pro")
-            if isinstance(m, str) and m: return m
+            with open(cfg) as f:
+                return yaml.safe_load(f) or {}
         except: pass
-    return "deepseek-v4-pro"
+    return {}
 
-def estimate_tokens(text): return max(1, len(text) // 4)
-def fmt(n): return f"{n:,}" if n else "N/A"
+def detect_model():
+    d = _read_collar_config()
+    m = d.get("model", {})
+    if isinstance(m, dict):
+        return m.get("default", "deepseek-v4-pro")
+    return m if isinstance(m, str) and m else "deepseek-v4-pro"
+
+def get_api_credentials():
+    d = _read_collar_config()
+    m = d.get("model", {})
+    provider = m.get("provider", "deepseek") if isinstance(m, dict) else "deepseek"
+    base_url = m.get("base_url", "https://api.deepseek.com/v1") if isinstance(m, dict) else "https://api.deepseek.com/v1"
+    env_map = {"deepseek": "DEEPSEEK_API_KEY", "openai": "OPENAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
+    api_key = os.environ.get(env_map.get(provider, ""))
+    if not api_key:
+        providers = d.get("providers", {})
+        if provider in providers and isinstance(providers[provider], dict):
+            k = providers[provider].get("api_key", "")
+            if k: api_key = k
+    return api_key, base_url
+
+def call_raw_api(task, model):
+    import urllib.request
+    api_key, base_url = get_api_credentials()
+    if not api_key:
+        raise RuntimeError("no API key — set DEEPSEEK_API_KEY")
+    payload = json.dumps({
+        "model": model,
+        "messages": [{"role": "user", "content": task}],
+    }).encode()
+    req = urllib.request.Request(f"{base_url}/chat/completions", data=payload, headers={
+        "Authorization": f"Bearer {api_key}", "Content-Type": "application/json"})
+    resp = urllib.request.urlopen(req, timeout=300)
+    body = json.loads(resp.read())
+    u = body.get("usage", {})
+    return {"input": u.get("prompt_tokens", 0), "output": u.get("completion_tokens", 0)}
+
+def detect(args=None):
+    available = []
+    for aid, cfg in AGENTS.items():
+        if aid in ("api", "collar_nodag", "hermes_dag"): continue
+        exe = cfg["cmd"].split()[0]
+        if subprocess.run(["which", exe], capture_output=True).returncode == 0:
+            available.append(aid)
+            # Variants always available if base agent is
+            if aid == "collar":
+                available.append("collar_nodag")
+            if aid == "hermes":
+                available.append("hermes_dag")
+    # api only when explicitly requested via --raw or --compare api
+    if args and (args.raw or "api" in (args.compare or [])):
+        if get_api_credentials()[0]:
+            available.append("api")
+    return available
+
+def count_tokens(agent_id, session_id=None):
+    home = Path.home()
+    if agent_id == "collar":
+        db_path = home / ".dag" / "state.db"
+    elif agent_id == "hermes":
+        db_path = home / ".hermes" / "state.db"
+    if agent_id in ("collar", "hermes"):
+        if not db_path.exists():
+            return {"input": 0, "output": 0}
+        import sqlite3
+        for _ in range(60):
+            try:
+                conn = sqlite3.connect(str(db_path))
+                if session_id:
+                    rows = conn.execute(
+                        "SELECT input_tokens, output_tokens FROM sessions WHERE id=?",
+                        (session_id,)
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        "SELECT input_tokens, output_tokens FROM sessions ORDER BY started_at DESC LIMIT 1"
+                    ).fetchall()
+                conn.close()
+                if rows and rows[0][0]:
+                    return {"input": rows[0][0], "output": rows[0][1] or 0}
+            except: pass
+            time.sleep(1)
+        return {"input": 0, "output": 0}
+    if agent_id == "claude":
+        path = home / "Library" / "Application Support" / "Claude" / "usage"
+    elif agent_id == "codex":
+        path = home / ".codex" / "usage"
+    else:
+        return {"input": 0, "output": 0}
+    total_in = total_out = 0
+    if path.is_dir():
+        for f in sorted(path.glob("*.jsonl"), key=os.path.getmtime, reverse=True)[:5]:
+            try:
+                for line in open(f):
+                    d = json.loads(line)
+                    u = d.get("usage", {})
+                    total_in += u.get("input_tokens", u.get("prompt_tokens", 0))
+                    total_out += u.get("output_tokens", u.get("completion_tokens", 0))
+            except: continue
+    return {"input": total_in, "output": total_out}
+
+def fmt(n):     return f"{n:,}" if n else "N/A"
 def cost(i, o, m="default"):
     r = RATES.get(m, RATES["default"])
-    return (i/1e6)*r["input"] + (o/1e6)*r["output"]
+    return (i / 1e6) * r["input"] + (o / 1e6) * r["output"]
 
-def db_path(agent_id):
-    home = Path.home()
-    if agent_id.startswith("collar"): return home / ".dag" / "state.db"
-    if agent_id.startswith("hermes"): return home / ".hermes" / "state.db"
-    return None
+def git_sha():
+    r = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=SCRIPT_DIR, capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else ""
 
-def read_tokens(agent_id, session_id=None):
-    db = db_path(agent_id)
-    if not db or not db.exists(): return {"input": 0, "output": 0}
-    import sqlite3
-    for _ in range(60):
-        try:
-            conn = sqlite3.connect(str(db))
-            if session_id:
-                rows = conn.execute("SELECT input_tokens, output_tokens FROM sessions WHERE id=?", (session_id,)).fetchall()
-            else:
-                rows = conn.execute("SELECT input_tokens, output_tokens FROM sessions ORDER BY started_at DESC LIMIT 1").fetchall()
-            conn.close()
-            if rows and (rows[0][0] or 0) > 0:
-                return {"input": rows[0][0], "output": rows[0][1] or 0}
-        except: pass
-        time.sleep(1)
-    return {"input": 0, "output": 0}
+# ── main ─────────────────────────────────────────────────────────────
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("task", nargs="?", default=DEFAULT_TASK)
     p.add_argument("--model", default=detect_model())
+    p.add_argument("--compare", nargs="*", default=["hermes"])
+    p.add_argument("--all", action="store_true")
     p.add_argument("--json", action="store_true")
+    p.add_argument("--dag", action="store_true")
     p.add_argument("--submit", action="store_true")
     p.add_argument("--no-submit", action="store_true")
+    p.add_argument("--raw", action="store_true", help="Include raw API comparison (needs API key)")
+    p.add_argument("--no-api", action="store_true", help="Skip API estimate row")
     args = p.parse_args()
-    if not args.json: args.json = True
-    do_submit = not args.no_submit
 
-    for exe in ["collar", "hermes"]:
-        if subprocess.run(["which", exe], capture_output=True).returncode != 0:
-            print(f"{exe} not installed"); sys.exit(1)
+    if not args.json:
+        args.json = True
+    args._submit = not getattr(args, "no_submit", False)
+
+    available = detect(args)
+    if "collar" not in available:
+        print("collar not installed"); sys.exit(1)
+
+    has_real_api = bool(get_api_credentials()[0])
+
+    targets = ["collar"]
+    if args.all:
+        for a in available:
+            if a != "collar" and a not in targets:
+                targets.append(a)
+                if len(targets) >= 5: break
+    else:
+        for a in args.compare:
+            if a == "api" and args.no_api:
+                continue
+            if a in available and a not in targets:
+                targets.append(a)
 
     task_tokens = estimate_tokens(args.task)
     ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    print(f"\n\033[1m  dogbench\033[0m  4 agents  model={args.model}  task≈{task_tokens}t\n")
+    sha = git_sha()
+    print(f"\n\033[1m  dogbench\033[0m  {len(targets)} agents  model={args.model}  task≈{task_tokens}t\n")
 
     results = {}
-    for i, (aid, (name, cmd_tpl, cwd)) in enumerate(AGENTS.items()):
-        cmd = cmd_tpl.replace("{prompt}", args.task)
-        print(f"  {COLORS[i]}{name}…\033[0m", end=" ", flush=True)
+    for aid in targets:
+        cfg = AGENTS[aid]
+
+        # ── raw API ──
+        if aid == "api":
+            print(f"  {cfg['name']}…", end=" ", flush=True)
+            start = time.time()
+            if has_real_api:
+                try:
+                    tokens = call_raw_api(args.task, args.model)
+                    elapsed = time.time() - start
+                    results[aid] = {"name": cfg["name"], "tokens": tokens, "time": elapsed, "error": None, "estimated": False}
+                    print(f"\033[32mOK\033[0m {elapsed:.0f}s")
+                except Exception as e:
+                    results[aid] = {"name": cfg["name"], "tokens": {"input":0,"output":0}, "time":0, "error": str(e), "estimated": False}
+                    print(f"\033[31mERR\033[0m {e}")
+            else:
+                # Estimated baseline: prompt tokens + ~2× for output
+                est_in = task_tokens
+                est_out = task_tokens * 2
+                results[aid] = {"name": cfg["name"] + " (est.)", "tokens": {"input": est_in, "output": est_out}, "time": 0.0, "error": None, "estimated": True}
+                print(f"\033[33mEST\033[0m")
+            time.sleep(1)
+            continue
+
+        # ── CLI agent ──
+        cmd = cfg["cmd"].replace("{prompt}", args.task)
+        workdir = cfg.get("cwd") if cfg.get("cwd") else SCRIPT_DIR
+        print(f"  {cfg['name']}…", end=" ", flush=True)
         start = time.time()
         try:
-            proc = subprocess.run(cmd, shell=True, capture_output=True, timeout=300, cwd=str(cwd))
+            proc = subprocess.run(cmd, shell=True, capture_output=True, timeout=300, cwd=str(workdir))
             elapsed = time.time() - start
             sid = None
-            for line in (proc.stderr + proc.stdout).decode(errors="replace").splitlines():
+            out = (proc.stderr + proc.stdout).decode(errors="replace")
+            for line in out.splitlines():
                 if "Session:" in line:
                     sid = line.split("Session:")[-1].strip().split()[0]
                     break
-            tokens = read_tokens(aid, session_id=sid)
+            tokens = count_tokens(aid, session_id=sid)
             ok = tokens["input"] > 0
-            results[aid] = {"name": name, "tokens": tokens, "time": elapsed, "ok": ok, "_sid": sid}
-            print(f"\033[32m{fmt(tokens['input'])}t\033[0m {elapsed:.0f}s" if ok else f"\033[33m?t\033[0m {elapsed:.0f}s")
+            results[aid] = {"name": cfg["name"], "tokens": tokens, "time": elapsed,
+                           "error": None if ok else "no tokens recorded", "estimated": False,
+                           "_session_id": sid}
+            print(f"\033[32mOK\033[0m {elapsed:.0f}s" if ok else f"\033[33mTOK?\033[0m {elapsed:.0f}s")
         except subprocess.TimeoutExpired:
-            results[aid] = {"name": name, "tokens": {"input":0,"output":0}, "time": 0, "ok": False, "_sid": None}
+            results[aid] = {"name": cfg["name"], "tokens": {"input":0,"output":0}, "time":0, "error":"timeout", "estimated": False}
             print("\033[31mTIMEOUT\033[0m")
         except Exception as e:
-            results[aid] = {"name": name, "tokens": {"input":0,"output":0}, "time": 0, "ok": False, "_sid": None}
-            print(f"\033[31mERR {e}\033[0m")
-        time.sleep(3)
+            results[aid] = {"name": cfg["name"], "tokens": {"input":0,"output":0}, "time":0, "error":str(e), "estimated": False}
+            print(f"\033[31mERR\033[0m")
+        time.sleep(5)
 
-    # reconciliation
-    for aid in AGENTS:
+    # ── reconciliation: re-check any agents that got 0 tokens ──
+    for aid in targets:
         r = results.get(aid, {})
-        if not r.get("ok") and r.get("_sid"):
-            tokens = read_tokens(aid, session_id=r["_sid"])
+        if r.get("tokens", {}).get("input", 0) == 0 and aid in ("collar", "hermes"):
+            sid = r.get("_session_id")
+            tokens = count_tokens(aid, session_id=sid)
             if tokens["input"] > 0:
-                results[aid]["tokens"] = tokens; results[aid]["ok"] = True
-                print(f"  \033[33m↻ {aid} recovered {tokens['input']:,}t\033[0m")
+                results[aid]["tokens"] = tokens
+                results[aid]["error"] = None
+                print(f"  \033[33m↻ {aid} tokens recovered ({tokens['input']:,})\033[0m")
 
-    # table
-    print("\n  Agent                  Input     Output      Cost  Overhead")
-    print("  " + "-" * 66)
-    cd = results.get("collar_dag", {}).get("tokens", {})
+    # ── table ──
+    print("\n  Agent                                Input     Output      Cost    Overhead")
+    print("  " + "-" * 78)
+    cd = results.get("collar", {}).get("tokens", {})
     ct = cd.get("input", 0) + cd.get("output", 0)
 
-    for i, aid in enumerate(AGENTS):
+    for aid in targets:
         r = results.get(aid, {})
+        name = r.get("name", aid)
         tok = r.get("tokens", {})
         inp, out = tok.get("input", 0), tok.get("output", 0)
         c = cost(inp, out, args.model)
-        oh = f"{inp//task_tokens}×" if task_tokens and inp else "—"
-        if inp == 0:
-            print(f"  {COLORS[i]}{r['name']:<22s}  {'N/A':>8s}  {'N/A':>8s}  {'N/A':>7s}  {'N/A':>7s}\033[0m")
+        color = AGENTS.get(aid, {}).get("color", "")
+        est = " ⚡" if r.get("estimated") else ""
+        oh = f"{inp // task_tokens}×" if task_tokens and inp else "—"
+        if r.get("error"):
+            print(f"  {color}{name:<35s}  {'ERROR':>8s}  {'':>8s}  {'':>7s}  {'':>8s}\033[0m")
+        elif inp == 0:
+            print(f"  {color}{name:<35s}  {'N/A':>8s}  {'N/A':>8s}  {'N/A':>7s}  {'N/A':>7s}\033[0m")
         else:
-            print(f"  {COLORS[i]}{r['name']:<22s}  {fmt(inp):>8s}  {fmt(out):>8s}  ${c:>6.4f}  {oh:>8s}\033[0m")
+            print(f"  {color}{name:<35s}  {fmt(inp):>8s}  {fmt(out):>8s}  ${c:>6.4f}  {oh:>8s}{est}\033[0m")
     print()
 
+    # ── savings ──
     if ct > 0:
-        for aid in AGENTS:
-            if aid == "collar_dag": continue
+        for aid in targets[1:]:
             r = results.get(aid, {})
             tt = r.get("tokens", {}).get("input", 0) + r.get("tokens", {}).get("output", 0)
             if tt > 0:
                 saved = tt - ct
-                pct = abs(saved) / max(ct, tt) * 100
+                pct = (saved / tt) * 100
                 if saved > 0:
-                    print(f"  \033[1;32mcollar+DAG saved {fmt(saved)}t ({pct:.0f}%) vs {r['name']}\033[0m")
+                    tag = " (est.)" if r.get("estimated") else ""
+                    print(f"  \033[1;32mCollar saved {fmt(saved)} tokens ({pct:.0f}%) vs {r['name']}{tag}\033[0m")
+                    print(f"    \033[1;32m${cost(cd['input'],cd['output'],args.model):.6f} vs ${cost(r['tokens']['input'],r['tokens']['output'],args.model):.6f}\033[0m\n")
                 elif saved < 0:
-                    print(f"  \033[1;31mcollar+DAG used {fmt(-saved)}t more ({pct:.0f}%) vs {r['name']}\033[0m")
-        print()
+                    print(f"  \033[1;31mCollar used {fmt(-saved)} more tokens ({-pct:.0f}%) vs {r['name']}\033[0m\n")
+                else:
+                    print(f"  \033[1;33mCollar tied with {r['name']}\033[0m\n")
 
+    # ── JSON output ──
     if args.json:
-        agents_out = []; collar_total = 0
-        for aid in AGENTS:
+        agents_out = []
+        collar_total = 0
+        for aid in targets:
             r = results.get(aid, {})
             t = r.get("tokens", {})
             total = t["input"] + t["output"]
-            agents_out.append({"id": aid, "name": r["name"], "input": t["input"], "output": t["output"],
-                "total": total, "time": round(r.get("time", 0), 1),
-                "cost": round(cost(t["input"], t["output"], args.model), 6)})
-            if aid == "collar_dag": collar_total = total
-        run = {"timestamp": ts, "model": args.model, "task_tokens": task_tokens,
-               "agents": agents_out, "collar_dag_total": collar_total}
-        hist_path = SCRIPT_DIR / "results.json"
+            entry = {
+                "agent_id": aid,
+                "name": r["name"],
+                "input": t["input"],
+                "output": t["output"],
+                "total": total,
+                "time": round(r["time"], 1),
+                "cost": round(cost(t["input"], t["output"], args.model), 6),
+                "estimated": r.get("estimated", False),
+            }
+            agents_out.append(entry)
+            if aid == "collar":
+                collar_total = total
+
+        run = {
+            "timestamp": ts,
+            "commit": sha,
+            "model": args.model,
+            "task_tokens": task_tokens,
+            "agents": agents_out,
+            "collar": {"total_tokens": collar_total},
+        }
+
+        history_path = SCRIPT_DIR / "results.json"
         history = []
-        if hist_path.exists():
+        if history_path.exists():
             try:
-                history = json.loads(hist_path.read_text())
-                if not isinstance(history, list): history = [history]
+                history = json.loads(history_path.read_text())
+                if not isinstance(history, list):
+                    history = [history]
             except: pass
         history.append(run)
-        if len(history) > 20: history = history[-20:]
-        hist_path.write_text(json.dumps(history, indent=2))
-        print(json.dumps(run, indent=2))
+        if len(history) > 20:
+            history = history[-20:]
+        history_path.write_text(json.dumps(history, indent=2))
 
-    if do_submit:
+        json_str = json.dumps(run, indent=2)
+        print(json_str)
+
+    if args.dag:
+        lines = ["[dogbench-results]"]
+        for aid in targets:
+            r = results.get(aid, {})
+            t = r.get("tokens", {})
+            lines.append(f"{aid}-> tokens:{t['input']+t['output']}(11), cost:{cost(t['input'],t['output'],args.model):.5f}(11)")
+        Path("results.dag").write_text("\n".join(lines))
+        print("  results.dag written\n")
+
+    if args._submit:
         branch = f"results/auto-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}"
         subprocess.run(["git", "checkout", "-b", branch], cwd=SCRIPT_DIR, capture_output=True)
         subprocess.run(["git", "add", "results.json"], cwd=SCRIPT_DIR, capture_output=True)
         subprocess.run(["git", "commit", "-m", f"chore: auto-submit {ts}"], cwd=SCRIPT_DIR, capture_output=True)
         r = subprocess.run(["git", "push", "origin", branch], cwd=SCRIPT_DIR, capture_output=True, text=True)
         if r.returncode == 0:
-            pr = subprocess.run(["gh", "pr", "create", "--repo", "specdog/dogbench", "--head", branch,
-                  "--base", "main", "--title", f"chore: auto-submit {ts}",
-                  "--body", f"```json\n{json.dumps(run, indent=2)}\n```"],
+            pr = subprocess.run(["gh", "pr", "create", "--repo", "specdog/dogbench",
+                  "--head", branch, "--base", "main",
+                  "--title", f"chore: auto-submit {ts}",
+                  "--body", f"Automated benchmark submission.\n\n```json\n{json.dumps(run, indent=2)}\n```"],
                   cwd=SCRIPT_DIR, capture_output=True, text=True)
-            print(f"\n  \033[32m✓ {pr.stdout.strip()}\033[0m")
+            print(f"\n  \033[32m✓ PR submitted: {pr.stdout.strip()}\033[0m")
         else:
-            print(f"\n  \033[33m⚠ push failed\033[0m")
+            print(f"\n  \033[33m⚠ push failed — create PR manually:\033[0m")
+            print(f"  gh pr create --repo specdog/dogbench --head {branch}")
 
 if __name__ == "__main__":
     main()
