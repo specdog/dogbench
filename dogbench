@@ -164,7 +164,8 @@ def main():
     p.add_argument("--dag", action="store_true")
     p.add_argument("--submit", action="store_true")
     p.add_argument("--no-submit", action="store_true")
-    p.add_argument("--no-api", action="store_true", help="Skip raw API (even estimated)")
+    p.add_argument("--raw", action="store_true", help="Include raw API comparison (needs API key)")
+    p.add_argument("--no-api", action="store_true", help="Skip API estimate row")
     args = p.parse_args()
 
     if not args.json:
