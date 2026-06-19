@@ -1,1 +1,33 @@
-[]
+[
+  {
+    "timestamp": "2026-06-19T02:24:24Z",
+    "model": "deepseek-v4-pro",
+    "runs_per_test": 2,
+    "tests": [
+      "agents",
+      "flow",
+      "measures",
+      "ci"
+    ],
+    "results": {
+      "collar": {
+        "name": "collar",
+        "passed": 8,
+        "tests": 8,
+        "avg_tokens": 16873
+      },
+      "collarnodog": {
+        "name": "collar (no .dag)",
+        "passed": 1,
+        "tests": 8,
+        "avg_tokens": 43438
+      },
+      "hermes": {
+        "name": "hermes (no .dag)",
+        "passed": 5,
+        "tests": 8,
+        "avg_tokens": 8778
+      }
+    }
+  }
+]
