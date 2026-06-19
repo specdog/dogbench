@@ -1,1 +1,46 @@
-[]
+[
+  {
+    "timestamp": "2026-06-19T01:51:51Z",
+    "model": "deepseek-v4-pro",
+    "task_tokens": 41,
+    "agents": [
+      {
+        "id": "collar",
+        "name": "collar + dotdog",
+        "input": 0,
+        "output": 0,
+        "total": 0,
+        "time": 25.8,
+        "cost": 0.0
+      },
+      {
+        "id": "collarnodog",
+        "name": "collar (no dotdog)",
+        "input": 52191,
+        "output": 1169,
+        "total": 53360,
+        "time": 30.0,
+        "cost": 0.028434
+      },
+      {
+        "id": "hermes_dag",
+        "name": "hermes + dotdog",
+        "input": 22987,
+        "output": 751,
+        "total": 23738,
+        "time": 16.6,
+        "cost": 0.012996
+      },
+      {
+        "id": "hermes",
+        "name": "hermes (no dotdog)",
+        "input": 5525,
+        "output": 1023,
+        "total": 6548,
+        "time": 20.5,
+        "cost": 0.004809
+      }
+    ],
+    "collar_total": 0
+  }
+]
