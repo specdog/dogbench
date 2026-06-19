@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""dogbench v2 — reads tests from tests/*.json"""
+"""dogbench v3 — spec-required vs self-contained tasks, terminal bench mode"""
 import argparse, datetime, json, os, shlex, statistics, subprocess, sys, time
 from pathlib import Path
 
@@ -23,7 +23,7 @@ def load_tests():
         tf = subdir / "test.json"
         if tf.exists():
             t = json.loads(tf.read_text())
-            tests.append({"id": t["id"], "task": t["task"], "cwd": str(subdir / "sample")})
+            tests.append({"id": t["id"], "task": t["task"], "cwd": str(subdir / "sample"), "grader": str(subdir / "grader.py")})
     return tests
 
 def detect_model():
@@ -42,6 +42,7 @@ def fmt(n): return f"{n:,}" if n else "N/A"
 def cost(i, o, m="default"):
     r = RATES.get(m, RATES["default"])
     return (i/1e6)*r["input"] + (o/1e6)*r["output"]
+
 def db_path(aid):
     home = Path.home()
     if aid.startswith("collar"): return home / ".dag" / "state.db"
@@ -62,15 +63,6 @@ def read_tokens(aid, sid=None):
         time.sleep(1)
     return (0, 0)
 
-def get_answer(aid, sid):
-    db = db_path(aid)
-    if not db or not db.exists(): return ""
-    import sqlite3
-    conn = sqlite3.connect(str(db))
-    msgs = conn.execute("SELECT content FROM messages WHERE session_id=? AND role='assistant' ORDER BY id DESC LIMIT 1", (sid,)).fetchall()
-    conn.close()
-    return msgs[0][0] if msgs else ""
-
 def run_test(aid, name, cmd_tpl, cwd, test):
     task = test["task"]
     cmd = cmd_tpl.replace("{task}", shlex.quote(task))
@@ -82,18 +74,83 @@ def run_test(aid, name, cmd_tpl, cwd, test):
                 sid = line.split("Session:")[-1].strip().split()[0]
                 break
         inp, out = read_tokens(aid, sid)
-        # Grade: run grader.py in the test cwd
-        grader = SCRIPT_DIR / "tests" / "grader.py"
+        # Grade
+        grader = test.get("grader") or (SCRIPT_DIR / "tests" / "grader.py")
         gr = subprocess.run([sys.executable, str(grader), str(cwd)], capture_output=True, timeout=30)
         passed = json.loads(gr.stdout).get("passed", False) if gr.returncode == 0 else False
         return (inp, out, passed)
     except: return (0, 0, False)
 
+def terminal_bench():
+    """Measure raw MCP query cost without running a full agent."""
+    print("\n  \033[1mTerminal Bench — raw MCP query cost\033[0m\n")
+
+    serve_cmd = f"bun /Users/dico/dotdog/packages/dotdog/src/cli.ts serve {SCRIPT_DIR} 2>/dev/null"
+
+    def mcp_call(payload):
+        p = payload + "\n"
+        proc = subprocess.run(
+            serve_cmd,
+            shell=True, capture_output=True, timeout=10,
+            cwd=str(SCRIPT_DIR),
+            input=p.encode()
+        )
+        for line in proc.stdout.decode(errors="replace").splitlines():
+            try:
+                return json.loads(line)
+            except:
+                continue
+        return None
+
+    # 1. tools/list size
+    r = mcp_call('{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"bench","version":"0.1.0"}}}')
+    r = mcp_call('{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')
+    if r:
+        tools_json = json.dumps(r["result"])
+        print(f"  tools/list response: {len(tools_json)} chars, {len(tools_json.split())} words")
+        for t in r["result"]["tools"]:
+            print(f"    {t['name']}: {t['description']}")
+
+    # 2. getEntity response size
+    r = mcp_call('{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"getEntity","arguments":{"name":"dogbench"}}}')
+    if r:
+        text = r["result"]["content"][0]["text"]
+        print(f"\n  getEntity('dogbench'): {len(text)} chars")
+        print(f"    {text}")
+
+    # 3. search response size
+    r = mcp_call('{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"search","arguments":{"q":"dog"}}}')
+    if r:
+        text = r["result"]["content"][0]["text"]
+        print(f"\n  search('dog'): {len(text)} chars")
+        print(f"    {text}")
+
+    # 4. traverse response size
+    r = mcp_call('{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"traverse","arguments":{"from":"dogbench","depth":2}}}')
+    if r:
+        text = r["result"]["content"][0]["text"]
+        print(f"\n  traverse('dogbench', depth=2): {len(text)} chars")
+        print(f"    {text}")
+
+    # 5. summary response size
+    r = mcp_call('{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"summary","arguments":{}}}')
+    if r:
+        text = r["result"]["content"][0]["text"]
+        print(f"\n  summary(): {len(text)} chars")
+        print(f"    {text}")
+
+    print()
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--model", default=detect_model())
     p.add_argument("--submit", action="store_true")
+    p.add_argument("--terminal", action="store_true", help="Run terminal bench only (raw MCP query cost)")
     args = p.parse_args()
+
+    if args.terminal:
+        terminal_bench()
+        return
 
     tests = load_tests()
     if not tests:
@@ -104,7 +161,7 @@ def main():
             print(f"{exe} not installed"); sys.exit(1)
 
     total = len(AGENTS) * len(tests)
-    print(f"\n\033[1m  dogbench v2\033[0m  {len(AGENTS)} agents × {len(tests)} tests = {total} total\n")
+    print(f"\n  \033[1mdogbench v3\033[0m  {len(AGENTS)} agents × {len(tests)} tests = {total} total\n")
 
     results = {}
     for aid, (name, cmd_tpl, _) in AGENTS.items():
@@ -120,29 +177,24 @@ def main():
             time.sleep(2)
         results[aid] = agent_runs
 
-    # Summary
-    print(f"\n  {'Agent':<22s} {'Avg In':>10s} {'Avg Out':>9s} {'Avg Total':>10s} {'Cost':>8s}")
-    print("  " + "-" * 64)
+    # Summary by test category
+    print(f"\n  {'Agent':<22s} {'Test':<10s} {'Pass':>4s} {'Avg In':>10s} {'Avg Out':>9s} {'Avg Total':>10s} {'Cost':>8s}")
+    print("  " + "-" * 80)
     summary = {}
-    for aid, name, _, _ in [(a, n, c, w) for a, (n, c, w) in AGENTS.items()]:
-        inputs = [r["input"] for r in results[aid].values() if r["input"] > 0]
-        outputs = [r["output"] for r in results[aid].values() if r["input"] > 0]
-        avg_in = statistics.mean(inputs) if inputs else 0
-        avg_out = statistics.mean(outputs) if outputs else 0
-        avg_total = avg_in + avg_out
-        avg_cost = cost(avg_in, avg_out, args.model)
-        summary[aid] = {"name": name, "avg_tokens": round(avg_total)}
-        avg_cost = cost(statistics.mean([r["input"] for r in results[aid].values() if r["input"] > 0]) if totals else 0,
-                       statistics.mean([r["output"] for r in results[aid].values() if r["input"] > 0]) if totals else 0,
-                       args.model)
-        summary[aid] = {"name": name, "passed": passed, "tests": len(tests), "avg_total": round(avg_total)}
-        print(f"  {COLORS.get(aid,'')}{name:<22s} {passed:>4d}/{len(tests):<3d} {fmt(int(min_in)):>10s} {fmt(int(avg_total)):>10s} ${avg_cost:>7.4f}\033[0m")
+    for aid, (name, _, _) in [(a, n, c) for a, (n, c, w) in AGENTS.items()]:
+        for test in tests:
+            tid = test["id"]
+            r = results[aid][tid]
+            inp, out, passed = r["input"], r["output"], r["passed"]
+            c = cost(inp, out, args.model) if inp > 0 else 0
+            print(f"  {COLORS.get(aid,'')}{name:<22s} {tid:<10s} {'✓' if passed else '✗':>4s} {fmt(inp):>10s} {fmt(out):>9s} {fmt(inp+out):>10s} ${c:>7.4f}\033[0m")
+        summary[aid] = {"name": name, "results": results[aid]}
 
     # JSON
     ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     out = {"timestamp": ts, "model": args.model, "results": {}}
     for aid, s in summary.items():
-        out["results"][aid] = {"name": s["name"], "passed": s["passed"], "tests": s["tests"], "avg_tokens": s["avg_total"]}
+        out["results"][aid] = {"name": s["name"], "runs": s["results"]}
     print(json.dumps(out, indent=2))
 
     hist = SCRIPT_DIR / "results.json"
@@ -161,7 +213,6 @@ def main():
 
 def submit_results(ts):
     import random, string
-    # Rate limit: skip if any results/auto-* PR is already open
     try:
         prs = subprocess.run(["gh", "pr", "list", "--head", "results/auto-", "--state", "open",
                               "--json", "number", "--jq", "length"],
