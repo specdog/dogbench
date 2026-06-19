@@ -11,11 +11,13 @@ DEFAULT_TASK = (
 )
 
 AGENTS = {
-    "collar":  {"name": "collar + dotdog (DAG-first)", "cmd": 'collar chat -q "{prompt}"', "color": "\033[32m"},
-    "hermes":  {"name": "hermes (upstream, no DAG)",    "cmd": 'hermes chat -q "{prompt}"', "color": "\033[36m"},
-    "claude":  {"name": "Claude Code",                  "cmd": 'claude "{prompt}" --print', "color": "\033[34m"},
-    "codex":   {"name": "OpenAI Codex",                  "cmd": 'codex exec "{prompt}"',   "color": "\033[35m"},
-    "api":     {"name": "DeepSeek API (raw, no tools)",  "cmd": None,                      "color": "\033[33m"},
+    "collar":  {"name": "collar + dotdog (DAG)",     "cmd": 'collar chat -q "{prompt}"',   "color": "\033[32m", "cwd": None},
+    "collar_nodag": {"name": "collar (no DAG)",      "cmd": 'collar chat -q "{prompt}" --ignore-rules', "color": "\033[33m", "cwd": "/tmp"},
+    "hermes":  {"name": "hermes (no DAG)",            "cmd": 'hermes chat -q "{prompt}"',   "color": "\033[36m", "cwd": "/tmp"},
+    "hermes_dag":  {"name": "hermes + specs",         "cmd": 'hermes chat -q "{prompt}"',   "color": "\033[35m", "cwd": None},
+    "claude":  {"name": "Claude Code",                "cmd": 'claude "{prompt}" --print',   "color": "\033[34m", "cwd": None},
+    "codex":   {"name": "OpenAI Codex",               "cmd": 'codex exec "{prompt}"',       "color": "\033[35m", "cwd": None},
+    "api":     {"name": "DeepSeek API (raw, no tools)","cmd": None,                         "color": "\033[33m", "cwd": None},
 }
 
 RATES = {
@@ -77,15 +79,22 @@ def call_raw_api(task, model):
     u = body.get("usage", {})
     return {"input": u.get("prompt_tokens", 0), "output": u.get("completion_tokens", 0)}
 
-def detect():
+def detect(args=None):
     available = []
     for aid, cfg in AGENTS.items():
-        if aid == "api": continue
+        if aid in ("api", "collar_nodag", "hermes_dag"): continue
         exe = cfg["cmd"].split()[0]
         if subprocess.run(["which", exe], capture_output=True).returncode == 0:
             available.append(aid)
-    # api is always available (real or estimated)
-    available.append("api")
+            # Variants always available if base agent is
+            if aid == "collar":
+                available.append("collar_nodag")
+            if aid == "hermes":
+                available.append("hermes_dag")
+    # api only when explicitly requested via --raw or --compare api
+    if args and (args.raw or "api" in (args.compare or [])):
+        if get_api_credentials()[0]:
+            available.append("api")
     return available
 
 def count_tokens(agent_id, session_id=None):
@@ -149,7 +158,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("task", nargs="?", default=DEFAULT_TASK)
     p.add_argument("--model", default=detect_model())
-    p.add_argument("--compare", nargs="*", default=["hermes", "api"])
+    p.add_argument("--compare", nargs="*", default=["collar_nodag", "hermes", "hermes_dag"])
     p.add_argument("--all", action="store_true")
     p.add_argument("--json", action="store_true")
     p.add_argument("--dag", action="store_true")
@@ -162,7 +171,7 @@ def main():
         args.json = True
     args._submit = not getattr(args, "no_submit", False)
 
-    available = detect()
+    available = detect(args)
     if "collar" not in available:
         print("collar not installed"); sys.exit(1)
 
@@ -214,10 +223,11 @@ def main():
 
         # ── CLI agent ──
         cmd = cfg["cmd"].replace("{prompt}", args.task)
+        workdir = cfg.get("cwd") if cfg.get("cwd") else SCRIPT_DIR
         print(f"  {cfg['name']}…", end=" ", flush=True)
         start = time.time()
         try:
-            proc = subprocess.run(cmd, shell=True, capture_output=True, timeout=300)
+            proc = subprocess.run(cmd, shell=True, capture_output=True, timeout=300, cwd=str(workdir))
             elapsed = time.time() - start
             sid = None
             out = (proc.stderr + proc.stdout).decode(errors="replace")
