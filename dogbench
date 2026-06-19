@@ -93,7 +93,8 @@ def run_test(aid, name, cmd_tpl, cwd, test):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--model", default=detect_model())
-    p.add_argument("--submit", action="store_true")
+    p.add_argument("--submit", action="store_true", default=True)
+    p.add_argument("--no-submit", dest="submit", action="store_false")
     args = p.parse_args()
 
     tests = load_tests()
@@ -108,27 +109,30 @@ def main():
     print(f"\n\033[1m  dogbench v2\033[0m  {len(AGENTS)} agents × {len(tests)} tests = {total} total\n")
 
     results = {}
-    for aid, (name, cmd_tpl, cwd) in AGENTS.items():
+    for aid, (name, cmd_tpl, _) in AGENTS.items():
         color = COLORS.get(aid, "")
         agent_runs = {}
         for test in tests:
             tid = test["id"]
-            inp, out, passed, answer = run_test(aid, name, cmd_tpl, cwd, test)
-            agent_runs[tid] = {"input": inp, "output": out, "passed": passed}
-            status = "\033[32m✓\033[0m" if passed else "\033[31m✗\033[0m"
-            print(f"  {color}{name:<20s} {tid:<10s} {status} {fmt(inp)}t/{fmt(out)}t\033[0m")
+            test_cwd = test["cwd"]
+            inp, out, _, _ = run_test(aid, name, cmd_tpl, test_cwd, test)
+            agent_runs[tid] = {"input": inp, "output": out}
+            print(f"  {color}{name:<20s} {tid:<10s} {fmt(inp)}t/{fmt(out)}t\033[0m")
             time.sleep(2)
         results[aid] = agent_runs
 
     # Summary
-    print(f"\n  {'Agent':<22s} {'Pass':>6s} {'Min In':>10s} {'Avg Total':>10s} {'Cost':>8s}")
-    print("  " + "-" * 60)
+    print(f"\n  {'Agent':<22s} {'Avg In':>10s} {'Avg Out':>9s} {'Avg Total':>10s} {'Cost':>8s}")
+    print("  " + "-" * 64)
     summary = {}
     for aid, name, _, _ in [(a, n, c, w) for a, (n, c, w) in AGENTS.items()]:
-        passed = sum(1 for r in results[aid].values() if r["passed"])
-        totals = [r["input"]+r["output"] for r in results[aid].values() if r["input"] > 0]
-        avg_total = statistics.mean(totals) if totals else 0
-        min_in = min(r["input"] for r in results[aid].values() if r["input"] > 0) if totals else 0
+        inputs = [r["input"] for r in results[aid].values() if r["input"] > 0]
+        outputs = [r["output"] for r in results[aid].values() if r["input"] > 0]
+        avg_in = statistics.mean(inputs) if inputs else 0
+        avg_out = statistics.mean(outputs) if outputs else 0
+        avg_total = avg_in + avg_out
+        avg_cost = cost(avg_in, avg_out, args.model)
+        summary[aid] = {"name": name, "avg_tokens": round(avg_total)}
         avg_cost = cost(statistics.mean([r["input"] for r in results[aid].values() if r["input"] > 0]) if totals else 0,
                        statistics.mean([r["output"] for r in results[aid].values() if r["input"] > 0]) if totals else 0,
                        args.model)
@@ -152,6 +156,34 @@ def main():
     history.append(out)
     if len(history) > 20: history = history[-20:]
     hist.write_text(json.dumps(history, indent=2))
+
+    if args.submit:
+        submit_results(ts)
+
+def submit_results(ts):
+    import random, string
+    # Rate limit: skip if any results/auto-* PR is already open
+    try:
+        prs = subprocess.run(["gh", "pr", "list", "--head", "results/auto-", "--state", "open",
+                              "--json", "number", "--jq", "length"],
+                             cwd=str(SCRIPT_DIR), capture_output=True, text=True)
+        if prs.returncode == 0 and prs.stdout.strip() and int(prs.stdout.strip()) > 0:
+            print(f"\n  Skipping submit — {prs.stdout.strip()} results PR(s) already open")
+            return
+    except: pass
+
+    suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+    branch = f"results/auto-{ts.replace(':','-').replace('T','-')[:16]}-{suffix}"
+    try:
+        subprocess.run(["git", "add", "results.json"], cwd=str(SCRIPT_DIR), check=True)
+        subprocess.run(["git", "commit", "-m", f"chore: auto benchmark run {ts}"], cwd=str(SCRIPT_DIR), check=True)
+        subprocess.run(["git", "push", "origin", f"HEAD:refs/heads/{branch}"], cwd=str(SCRIPT_DIR), check=True)
+        subprocess.run(["gh", "pr", "create", "--base", "main", "--head", branch,
+                        "--title", f"chore: auto benchmark run {ts}", "--body", "Auto-submitted benchmark results."],
+                       cwd=str(SCRIPT_DIR), check=True)
+        print(f"\n  Published to {branch} + PR created")
+    except subprocess.CalledProcessError as e:
+        print(f"\n  Submit failed: {e}")
 
 if __name__ == "__main__":
     main()
