@@ -19,14 +19,13 @@ jobs:
           assert len(runs) > 0, 'empty results'
           for run in runs:
               assert 'model' in run, 'missing model'
-              assert 'agents' in run, 'missing agents'
-              assert len(run['agents']) >= 1, 'need at least 1 agent'
-              for a in run['agents']:
-                  assert 'name' in a, 'missing name'
-                  assert 'input' in a, 'missing input'
-                  assert 'output' in a, 'missing output'
-                  assert 'total' in a, 'missing total'
-                  assert 'cost' in a, 'missing cost'
+              assert 'results' in run, 'missing results'
+              assert len(run['results']) >= 1, 'need at least 1 agent'
+              for aid, a in run['results'].items():
+                  assert 'name' in a, f'missing name in {aid}'
+                  assert 'passed' in a, f'missing passed in {aid}'
+                  assert 'tests' in a, f'missing tests in {aid}'
+                  assert 'avg_tokens' in a, f'missing avg_tokens in {aid}'
           print(f'Valid: {len(runs)} runs, latest model={runs[-1][\"model\"]}')
           "
   

@@ -93,7 +93,8 @@ def run_test(aid, name, cmd_tpl, cwd, test):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--model", default=detect_model())
-    p.add_argument("--submit", action="store_true")
+    p.add_argument("--submit", action="store_true", default=True)
+    p.add_argument("--no-submit", dest="submit", action="store_false")
     args = p.parse_args()
 
     tests = load_tests()
@@ -152,6 +153,34 @@ def main():
     history.append(out)
     if len(history) > 20: history = history[-20:]
     hist.write_text(json.dumps(history, indent=2))
+
+    if args.submit:
+        submit_results(ts)
+
+def submit_results(ts):
+    import random, string
+    # Rate limit: skip if any results/auto-* PR is already open
+    try:
+        prs = subprocess.run(["gh", "pr", "list", "--head", "results/auto-", "--state", "open",
+                              "--json", "number", "--jq", "length"],
+                             cwd=str(SCRIPT_DIR), capture_output=True, text=True)
+        if prs.returncode == 0 and prs.stdout.strip() and int(prs.stdout.strip()) > 0:
+            print(f"\n  Skipping submit — {prs.stdout.strip()} results PR(s) already open")
+            return
+    except: pass
+
+    suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+    branch = f"results/auto-{ts.replace(':','-').replace('T','-')[:16]}-{suffix}"
+    try:
+        subprocess.run(["git", "add", "results.json"], cwd=str(SCRIPT_DIR), check=True)
+        subprocess.run(["git", "commit", "-m", f"chore: auto benchmark run {ts}"], cwd=str(SCRIPT_DIR), check=True)
+        subprocess.run(["git", "push", "origin", f"HEAD:refs/heads/{branch}"], cwd=str(SCRIPT_DIR), check=True)
+        subprocess.run(["gh", "pr", "create", "--base", "main", "--head", branch,
+                        "--title", f"chore: auto benchmark run {ts}", "--body", "Auto-submitted benchmark results."],
+                       cwd=str(SCRIPT_DIR), check=True)
+        print(f"\n  Published to {branch} + PR created")
+    except subprocess.CalledProcessError as e:
+        print(f"\n  Submit failed: {e}")
 
 if __name__ == "__main__":
     main()
