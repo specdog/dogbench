@@ -3,7 +3,7 @@
 [![semver](https://img.shields.io/badge/semver-0.1.0-blue)](https://semver.org)
 [![benchmark](https://img.shields.io/badge/live%20results-specdog.github.io/dogbench-green)](https://specdog.github.io/dogbench/)
 
-One command to prove collar saves tokens.
+One command to measure Collar token savings.
 
 ```bash
 dogbench
@@ -56,14 +56,9 @@ cd ~/dogbench && git pull origin main && ~/collar/.venv/bin/pip install -e . && 
 | Setup | Command |
 |-------|---------|
 | Collar only | `./dogbench --json` |
-| Collar + Claude Code | `./dogbench --all --json` |
-| Collar + Codex | `./dogbench --all --json` |
-| Collar + Hermes | `./dogbench --compare hermes --json` |
-| DeepSeek backend | `./dogbench --model deepseek-v4-pro --json` |
-| Claude backend | `./dogbench --model claude-sonnet-4 --json` |
-| GPT-5 backend | `./dogbench --model gpt-5 --json` |
-| Custom task | `dogbench "your prompt" --json` |
-| .dag output | `dogbench --dag` |
+| Collar + dotdog | `./dogbench --dag --json` |
+| Payload pack/unpack | `./dogbench --bench pack --json` |
+| Token savings delta | `./dogbench --bench savings --json` |
 
 ## Comparison Scenarios
 
