@@ -158,7 +158,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("task", nargs="?", default=DEFAULT_TASK)
     p.add_argument("--model", default=detect_model())
-    p.add_argument("--compare", nargs="*", default=["collar_nodag", "hermes", "hermes_dag"])
+    p.add_argument("--compare", nargs="*", default=["hermes"])
     p.add_argument("--all", action="store_true")
     p.add_argument("--json", action="store_true")
     p.add_argument("--dag", action="store_true")
@@ -248,7 +248,7 @@ def main():
         except Exception as e:
             results[aid] = {"name": cfg["name"], "tokens": {"input":0,"output":0}, "time":0, "error":str(e), "estimated": False}
             print(f"\033[31mERR\033[0m")
-        time.sleep(2)
+        time.sleep(5)
 
     # ── reconciliation: re-check any agents that got 0 tokens ──
     for aid in targets:
