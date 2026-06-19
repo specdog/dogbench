@@ -98,7 +98,7 @@ def count_tokens(agent_id, session_id=None):
         if not db_path.exists():
             return {"input": 0, "output": 0}
         import sqlite3
-        for _ in range(30):
+        for _ in range(60):
             try:
                 conn = sqlite3.connect(str(db_path))
                 if session_id:
@@ -228,7 +228,8 @@ def main():
             tokens = count_tokens(aid, session_id=sid)
             ok = tokens["input"] > 0
             results[aid] = {"name": cfg["name"], "tokens": tokens, "time": elapsed,
-                           "error": None if ok else "no tokens recorded", "estimated": False}
+                           "error": None if ok else "no tokens recorded", "estimated": False,
+                           "_session_id": sid}
             print(f"\033[32mOK\033[0m {elapsed:.0f}s" if ok else f"\033[33mTOK?\033[0m {elapsed:.0f}s")
         except subprocess.TimeoutExpired:
             results[aid] = {"name": cfg["name"], "tokens": {"input":0,"output":0}, "time":0, "error":"timeout", "estimated": False}
@@ -237,6 +238,17 @@ def main():
             results[aid] = {"name": cfg["name"], "tokens": {"input":0,"output":0}, "time":0, "error":str(e), "estimated": False}
             print(f"\033[31mERR\033[0m")
         time.sleep(2)
+
+    # ── reconciliation: re-check any agents that got 0 tokens ──
+    for aid in targets:
+        r = results.get(aid, {})
+        if r.get("tokens", {}).get("input", 0) == 0 and aid in ("collar", "hermes"):
+            sid = r.get("_session_id")
+            tokens = count_tokens(aid, session_id=sid)
+            if tokens["input"] > 0:
+                results[aid]["tokens"] = tokens
+                results[aid]["error"] = None
+                print(f"  \033[33m↻ {aid} tokens recovered ({tokens['input']:,})\033[0m")
 
     # ── table ──
     print("\n  Agent                                Input     Output      Cost    Overhead")
