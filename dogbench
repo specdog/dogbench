@@ -36,12 +36,13 @@ TESTS = [
 ]
 
 AGENTS = {
-    "collar":      ("collar",              'collar chat -q {task}',   SCRIPT_DIR),
-    "collarnodog": ("collar (no .dag)",    'collar chat -q {task}',   TMPDIR),
-    "hermes":      ("hermes (no .dag)",    'hermes chat -q {task}',   TMPDIR),
+    "hermes":      ("hermes",              'hermes chat -q {task}',   TMPDIR),
+    "hermes_dag":  ("hermes + dotdog",     'hermes chat -q {task}',   SCRIPT_DIR),
+    "collar":      ("collar",              'collar chat -q {task}',   TMPDIR),
+    "collar_dag":  ("collar + dotdog",     'collar chat -q {task}',   SCRIPT_DIR),
 }
 
-COLORS = {"collar": "\033[32m", "collarnodog": "\033[33m", "hermes": "\033[36m"}
+COLORS = {"hermes": "\033[36m", "hermes_dag": "\033[35m", "collar": "\033[33m", "collar_dag": "\033[32m"}
 
 RATES = {"deepseek-v4-pro": {"input": 0.50, "output": 2.00}, "default": {"input": 1.00, "output": 5.00}}
 
