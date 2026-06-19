@@ -1,77 +1,37 @@
 [
   {
-    "timestamp": "2026-06-19T00:56:39Z",
-    "commit": "6b2510c",
+    "timestamp": "2026-06-19T01:23:06Z",
     "model": "deepseek-v4-pro",
     "task_tokens": 41,
     "agents": [
       {
-        "agent_id": "collar",
-        "name": "collar + dotdog (DAG)",
-        "input": 33818,
-        "output": 1425,
-        "total": 35243,
-        "time": 25.4,
-        "cost": 0.019759,
-        "estimated": false
-      },
-      {
-        "agent_id": "hermes",
-        "name": "hermes (no DAG)",
-        "input": 5335,
-        "output": 1039,
-        "total": 6374,
-        "time": 17.6,
-        "cost": 0.004745,
-        "estimated": false
-      }
-    ],
-    "collar": {
-      "total_tokens": 35243
-    }
-  },
-  {
-    "timestamp": "2026-06-19T00:58:10Z",
-    "model": "deepseek-v4-pro",
-    "task_tokens": 41,
-    "agents": [
-      {
-        "id": "collar_dag",
-        "name": "collar + DAG",
-        "input": 54232,
-        "output": 1735,
-        "total": 55967,
-        "time": 32.9,
-        "cost": 0.030586
-      },
-      {
-        "id": "collar_nodag",
-        "name": "collar (no DAG)",
-        "input": 54308,
-        "output": 1625,
-        "total": 55933,
-        "time": 32.3,
-        "cost": 0.030404
+        "id": "collar",
+        "name": "collar",
+        "input": 8823,
+        "output": 1442,
+        "total": 10265,
+        "time": 22.1,
+        "cost": 0.007295
       },
       {
         "id": "hermes_dag",
-        "name": "hermes + specs",
-        "input": 25973,
-        "output": 1023,
-        "total": 26996,
-        "time": 20.2,
-        "cost": 0.015033
+        "name": "hermes + dotdog",
+        "input": 12373,
+        "output": 983,
+        "total": 13356,
+        "time": 17.2,
+        "cost": 0.008153
       },
       {
-        "id": "hermes_nodag",
-        "name": "hermes (no DAG)",
-        "input": 11948,
-        "output": 1258,
-        "total": 13206,
-        "time": 23.4,
-        "cost": 0.00849
+        "id": "hermes",
+        "name": "hermes (no dotdog)",
+        "input": 5325,
+        "output": 893,
+        "total": 6218,
+        "time": 15.3,
+        "cost": 0.004449
       }
     ],
-    "collar_dag_total": 55967
+    "collar_total": 10265
   }
 ]
