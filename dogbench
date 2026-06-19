@@ -12,13 +12,12 @@ DEFAULT_TASK = (
 )
 
 AGENTS = {
-    "collar_dag":   ("collar + DAG",     'collar chat -q "{prompt}"',   SCRIPT_DIR),
-    "collar_nodag": ("collar (no DAG)",  'collar chat -q "{prompt}"',   TMPDIR),
-    "hermes_dag":   ("hermes + specs",   'hermes chat -q "{prompt}"',   SCRIPT_DIR),
-    "hermes_nodag": ("hermes (no DAG)",  'hermes chat -q "{prompt}"',   TMPDIR),
+    "collar":     ("collar",              'collar chat -q "{prompt}"',   SCRIPT_DIR),
+    "hermes_dag": ("hermes + dotdog",     'hermes chat -q "{prompt}"',   SCRIPT_DIR),
+    "hermes":     ("hermes (no dotdog)",  'hermes chat -q "{prompt}"',   TMPDIR),
 }
 
-COLORS = ["\033[32m", "\033[33m", "\033[35m", "\033[36m"]
+COLORS = ["\033[32m", "\033[35m", "\033[36m"]
 
 RATES = {
     "deepseek-v4-pro": {"input": 0.50, "output": 2.00},
@@ -84,7 +83,7 @@ def main():
 
     task_tokens = estimate_tokens(args.task)
     ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    print(f"\n\033[1m  dogbench\033[0m  4 agents  model={args.model}  task={task_tokens}t\n")
+    print(f"\n\033[1m  dogbench\033[0m  3 agents  model={args.model}  task={task_tokens}t\n")
 
     results = {}
     for i, (aid, (name, cmd_tpl, cwd)) in enumerate(AGENTS.items()):
@@ -121,7 +120,7 @@ def main():
 
     print("\n  Agent                  Input     Output      Cost  Overhead")
     print("  " + "-" * 66)
-    cd = results.get("collar_dag", {}).get("tokens", {})
+    cd = results.get("collar", {}).get("tokens", {})
     ct = cd.get("input", 0) + cd.get("output", 0)
 
     for i, aid in enumerate(AGENTS):
@@ -138,7 +137,7 @@ def main():
 
     if ct > 0:
         for aid in AGENTS:
-            if aid == "collar_dag": continue
+            if aid == "collar": continue
             r = results.get(aid, {})
             tt = r.get("tokens", {}).get("input", 0) + r.get("tokens", {}).get("output", 0)
             if tt > 0:
@@ -158,10 +157,10 @@ def main():
         agents_out.append({"id": aid, "name": r["name"], "input": t["input"], "output": t["output"],
             "total": total, "time": round(r.get("time", 0), 1),
             "cost": round(cost(t["input"], t["output"], args.model), 6)})
-        if aid == "collar_dag": collar_total = total
+        if aid == "collar": collar_total = total
 
     run = {"timestamp": ts, "model": args.model, "task_tokens": task_tokens,
-           "agents": agents_out, "collar_dag_total": collar_total}
+           "agents": agents_out, "collar_total": collar_total}
 
     hist_path = SCRIPT_DIR / "results.json"
     history = []
