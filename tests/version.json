@@ -1,5 +1,0 @@
-{
-  "id": "version",
-  "task": "What npm package name and version does this project's package.json declare? Answer with just: name version",
-  "ground": "dogbench, 0.2.0"
-}
