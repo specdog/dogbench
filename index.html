@@ -150,8 +150,6 @@ cd dogbench && pip install -e .</code></pre>
 
 <script>
 // ── helpers ──
-const $ = s => document.querySelector(s);
-const $$ = s => document.querySelectorAll(s);
 function fmt(n) { return n.toLocaleString(); }
 function pct(a, b) { return b ? Math.round((a / b) * 100) : 0; }
 
@@ -206,27 +204,27 @@ function renderRow(tbl, a, collarTotal, taskTokens, maxTotal, extraClass) {
 
 // ── tab switching ──
 function showTab(name) {
-  $$('.nav a').forEach(a => a.classList.remove('active'));
+  document.querySelectorAll('.nav a').forEach(a => a.classList.remove('active'));
   if (name === 'results') {
-    $('#tab-results').style.display = 'block';
-    $('#tab-guide').style.display = 'none';
-    $$('.nav a')[0].classList.add('active');
+    document.getElementById('tab-results').style.display = 'block';
+    document.getElementById('tab-guide').style.display = 'none';
+    document.querySelectorAll('.nav a')[0].classList.add('active');
   } else {
-    $('#tab-results').style.display = 'none';
-    $('#tab-guide').style.display = 'block';
-    $$('.nav a')[1].classList.add('active');
+    document.getElementById('tab-results').style.display = 'none';
+    document.getElementById('tab-guide').style.display = 'block';
+    document.querySelectorAll('.nav a')[1].classList.add('active');
   }
 }
 
 // ── load ──
-fetch('results.json?v=2')
+fetch('results.json')
   .then(r => r.json())
   .then(raw => {
     const history = Array.isArray(raw) ? raw : [raw];
     if (!history.length) throw new Error('empty');
 
-    $('nodata').style.display = 'none';
-    $('#run-count').textContent = `${history.length} run${history.length>1?'s':''}`;
+    document.getElementById('nodata').style.display = 'none';
+    document.getElementById('run-count').textContent = `${history.length} run${history.length>1?'s':''}`;
 
     const latest = history[history.length - 1];
     const taskTokens = latest.task_tokens || 0;
@@ -234,11 +232,11 @@ fetch('results.json?v=2')
     const collarRow = latest.agents.find(a => a.agent_id === 'collar');
     const collarTotal = collarRow ? collarRow.total : 0;
 
-    $('#run-meta').textContent =
+    document.getElementById('run-meta').textContent =
       `· ${latest.timestamp ? latest.timestamp.slice(0,16) : ''} · ${model} · task≈${taskTokens}t`;
 
     // ── latest table ──
-    const tbl = $('#latest');
+    const tbl = document.getElementById('latest');
     let maxTotal = 0;
     latest.agents.forEach(a => { if (a.total > maxTotal) maxTotal = a.total; });
     latest.agents.forEach(a => renderRow(tbl, a, collarTotal, taskTokens, maxTotal, 'latest'));
@@ -251,8 +249,8 @@ fetch('results.json?v=2')
         return s > best.saved ? {name: a.name, saved: s, pct: pct(s, a.total)} : best;
       }, {name: '', saved: 0, pct: 0});
       if (bestSave.saved > 0) {
-        $('#hero').style.display = 'block';
-        $('#hero-text').textContent =
+        document.getElementById('hero').style.display = 'block';
+        document.getElementById('hero-text').textContent =
           `⚡ Collar saves ${fmt(bestSave.saved)} tokens (${bestSave.pct}%) vs ${bestSave.name}`;
       }
     }
@@ -274,7 +272,7 @@ fetch('results.json?v=2')
     });
 
     const bestCollar = bestMap['collar'];
-    const bTbl = $('#best');
+    const bTbl = document.getElementById('best');
     let bestMax = 0;
     Object.values(bestMap).forEach(b => { if (b.total > bestMax) bestMax = b.total; });
     Object.values(bestMap).forEach(b => {
@@ -305,7 +303,7 @@ fetch('results.json?v=2')
     });
 
     // ── history ──
-    const histDiv = $('#history');
+    const histDiv = document.getElementById('history');
     const last10 = history.slice(-10).reverse();
     const byAgent = {};
     history.forEach(run => {
@@ -336,9 +334,9 @@ fetch('results.json?v=2')
 
   })
   .catch(() => {
-    $('nodata').style.display = 'block';
-    $$('h2').forEach(h => h.style.display = 'none');
-    $$('table').forEach(t => t.style.display = 'none');
+    document.getElementById('nodata').style.display = 'block';
+    document.querySelectorAll('h2').forEach(h => h.style.display = 'none');
+    document.querySelectorAll('table').forEach(t => t.style.display = 'none');
   });
 </script>
 
