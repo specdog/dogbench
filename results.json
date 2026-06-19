@@ -28,5 +28,65 @@
         "avg_tokens": 41412
       }
     }
+  },
+  {
+    "timestamp": "2026-06-19T02:52:02Z",
+    "model": "deepseek-v4-pro",
+    "results": {
+      "hermes": {
+        "name": "hermes",
+        "passed": 0,
+        "tests": 1,
+        "avg_tokens": 1526
+      },
+      "hermes_dag": {
+        "name": "hermes + dotdog",
+        "passed": 1,
+        "tests": 1,
+        "avg_tokens": 16136
+      },
+      "collar": {
+        "name": "collar",
+        "passed": 0,
+        "tests": 1,
+        "avg_tokens": 29817
+      },
+      "collar_dag": {
+        "name": "collar + dotdog",
+        "passed": 1,
+        "tests": 1,
+        "avg_tokens": 22868
+      }
+    }
+  },
+  {
+    "timestamp": "2026-06-19T02:55:14Z",
+    "model": "deepseek-v4-pro",
+    "results": {
+      "hermes": {
+        "name": "hermes",
+        "passed": 0,
+        "tests": 1,
+        "avg_tokens": 1545
+      },
+      "hermes_dag": {
+        "name": "hermes + dotdog",
+        "passed": 1,
+        "tests": 1,
+        "avg_tokens": 16183
+      },
+      "collar": {
+        "name": "collar",
+        "passed": 0,
+        "tests": 1,
+        "avg_tokens": 19754
+      },
+      "collar_dag": {
+        "name": "collar + dotdog",
+        "passed": 1,
+        "tests": 1,
+        "avg_tokens": 14850
+      }
+    }
   }
 ]
