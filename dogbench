@@ -1,31 +1,49 @@
 #!/usr/bin/env python3
-"""dogbench — collar vs hermes, with and without DAG."""
-import argparse, datetime, json, os, shlex, subprocess, sys, time
+"""dogbench v2 — deterministic test suite with ground truth verification."""
+import argparse, datetime, json, os, shlex, re, statistics, subprocess, sys, time
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 TMPDIR = Path("/tmp")
-DEFAULT_TASK = (
-    "In the specdog/dogbench project: what agents does dogbench support, "
-    "what is the benchmark flow, and what does it measure? "
-    "Answer concisely from the project structure."
-)
+RUNS = 3
+
+# ── Test suite ── each test has a task, ground truth keywords, and a verifier
+TESTS = [
+    {
+        "id": "agents",
+        "task": "What agents does dogbench support? List their names exactly as defined in the project.",
+        "verify": lambda answer: all(k in answer.lower() for k in ["collar", "hermes", "claude", "codex"]),
+        "ground": "collar, hermes, claude, codex"
+    },
+    {
+        "id": "flow",
+        "task": "What is the benchmark flow in dogbench? List the steps in order.",
+        "verify": lambda answer: all(k in answer.lower() for k in ["detect", "run", "collect", "compare", "output"]),
+        "ground": "Detect→Run→Collect→Compare→Output"
+    },
+    {
+        "id": "measures",
+        "task": "What does dogbench measure? List the metrics.",
+        "verify": lambda answer: all(k in answer.lower() for k in ["input", "output", "token", "cost"]),
+        "ground": "input tokens, output tokens, cost (USD)"
+    },
+    {
+        "id": "ci",
+        "task": "How does the CI workflow validate benchmark submissions? What does it check?",
+        "verify": lambda answer: any(k in answer.lower() for k in ["json", "validate", "schema", "assert"]),
+        "ground": "CI validates results.json schema with assertions"
+    },
+]
 
 AGENTS = {
-    "collar":     ("collar + dotdog",     'collar chat -q "{prompt}"',   SCRIPT_DIR),
-    "collarnodog":("collar (no dotdog)",  'collar chat -q "{prompt}"',   TMPDIR),
-    "hermes_dag": ("hermes + dotdog",     'hermes chat -q "{prompt}"',   SCRIPT_DIR),
-    "hermes":     ("hermes (no dotdog)",  'hermes chat -q "{prompt}"',   TMPDIR),
+    "collar":      ("collar",              'collar chat -q {task}',   SCRIPT_DIR),
+    "collarnodog": ("collar (no .dag)",    'collar chat -q {task}',   TMPDIR),
+    "hermes":      ("hermes (no .dag)",    'hermes chat -q {task}',   TMPDIR),
 }
 
-COLORS = ["\033[32m", "\033[33m", "\033[35m", "\033[36m"]
+COLORS = {"collar": "\033[32m", "collarnodog": "\033[33m", "hermes": "\033[36m"}
 
-RATES = {
-    "deepseek-v4-pro": {"input": 0.50, "output": 2.00},
-    "gpt-5":           {"input": 1.25, "output": 10.0},
-    "claude-sonnet-4": {"input": 3.00, "output": 15.0},
-    "default":         {"input": 1.00, "output":  5.0},
-}
+RATES = {"deepseek-v4-pro": {"input": 0.50, "output": 2.00}, "default": {"input": 1.00, "output": 5.00}}
 
 def detect_model():
     cfg = Path.home() / ".dag" / "config.yaml"
@@ -39,130 +57,143 @@ def detect_model():
         except: pass
     return "deepseek-v4-pro"
 
-def estimate_tokens(text): return max(1, len(text) // 4)
 def fmt(n): return f"{n:,}" if n else "N/A"
 def cost(i, o, m="default"):
     r = RATES.get(m, RATES["default"])
     return (i/1e6)*r["input"] + (o/1e6)*r["output"]
-
-def db_path(agent_id):
+def db_path(aid):
     home = Path.home()
-    if agent_id.startswith("collar"): return home / ".dag" / "state.db"
-    if agent_id.startswith("hermes"): return home / ".hermes" / "state.db"
-    return None
+    if aid.startswith("collar"): return home / ".dag" / "state.db"
+    if aid.startswith("hermes"): return home / ".hermes" / "state.db"
 
-def read_tokens(agent_id, session_id=None):
-    db = db_path(agent_id)
-    if not db or not db.exists(): return {"input": 0, "output": 0}
+def read_tokens(aid, sid=None):
+    db = db_path(aid)
+    if not db or not db.exists(): return (0, 0)
     import sqlite3
     for _ in range(60):
         try:
             conn = sqlite3.connect(str(db))
-            if session_id:
-                rows = conn.execute("SELECT input_tokens, output_tokens FROM sessions WHERE id=?", (session_id,)).fetchall()
-            else:
-                rows = conn.execute("SELECT input_tokens, output_tokens FROM sessions ORDER BY started_at DESC LIMIT 1").fetchall()
+            if sid: rows = conn.execute("SELECT input_tokens, output_tokens FROM sessions WHERE id=?", (sid,)).fetchall()
+            else: rows = conn.execute("SELECT input_tokens, output_tokens FROM sessions ORDER BY started_at DESC LIMIT 1").fetchall()
             conn.close()
-            if rows and (rows[0][0] or 0) > 0:
-                return {"input": rows[0][0], "output": rows[0][1] or 0}
+            if rows and (rows[0][0] or 0) > 0: return (rows[0][0], rows[0][1] or 0)
         except: pass
         time.sleep(1)
-    return {"input": 0, "output": 0}
+    return (0, 0)
+
+def get_answer(aid, sid):
+    """Extract the assistant's final answer from the session."""
+    db = db_path(aid)
+    if not db or not db.exists(): return ""
+    import sqlite3
+    conn = sqlite3.connect(str(db))
+    msgs = conn.execute("SELECT role, content FROM messages WHERE session_id=? AND role='assistant' ORDER BY id DESC LIMIT 1", (sid,)).fetchall()
+    conn.close()
+    return msgs[0][1] if msgs else ""
+
+def run_test(aid, name, cmd_tpl, cwd, test):
+    """Run one test, return (input_tokens, output_tokens, passed, answer)."""
+    task = test["task"]
+    cmd = cmd_tpl.replace("{task}", shlex.quote(task))
+    start = time.time()
+    try:
+        proc = subprocess.run(cmd, shell=True, capture_output=True, timeout=300, cwd=str(cwd))
+        elapsed = time.time() - start
+        sid = None
+        for line in (proc.stderr + proc.stdout).decode(errors="replace").splitlines():
+            if "Session:" in line:
+                sid = line.split("Session:")[-1].strip().split()[0]
+                break
+        inp, out = read_tokens(aid, sid)
+        answer = get_answer(aid, sid) if sid else ""
+        passed = test["verify"](answer) if answer else False
+        return (inp, out, passed, elapsed, answer[:200] if answer else "")
+    except Exception as e:
+        return (0, 0, False, 0, str(e)[:100])
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("task", nargs="?", default=DEFAULT_TASK)
     p.add_argument("--model", default=detect_model())
+    p.add_argument("--runs", type=int, default=RUNS)
     p.add_argument("--submit", action="store_true")
-    p.add_argument("--no-submit", action="store_true")
     args = p.parse_args()
-    do_submit = not args.no_submit
 
     for exe in ["collar", "hermes"]:
         if subprocess.run(["which", exe], capture_output=True).returncode != 0:
             print(f"{exe} not installed"); sys.exit(1)
 
-    task_tokens = estimate_tokens(args.task)
-    ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    print(f"\n\033[1m  dogbench\033[0m  3 agents  model={args.model}  task={task_tokens}t\n")
+    total = len(AGENTS) * len(TESTS) * args.runs
+    print(f"\n\033[1m  dogbench v2\033[0m  {len(AGENTS)} agents × {len(TESTS)} tests × {args.runs} runs = {total} total\n")
 
-    results = {}
-    for i, (aid, (name, cmd_tpl, cwd)) in enumerate(AGENTS.items()):
-        cmd = cmd_tpl.replace("{prompt}", shlex.quote(args.task))
-        print(f"  {COLORS[i]}{name}...\033[0m", end=" ", flush=True)
-        start = time.time()
-        try:
-            proc = subprocess.run(cmd, shell=True, capture_output=True, timeout=300, cwd=str(cwd))
-            elapsed = time.time() - start
-            sid = None
-            for line in (proc.stderr + proc.stdout).decode(errors="replace").splitlines():
-                if "Session:" in line:
-                    sid = line.split("Session:")[-1].strip().split()[0]
-                    break
-            tokens = read_tokens(aid, session_id=sid)
-            ok = tokens["input"] > 0
-            results[aid] = {"name": name, "tokens": tokens, "time": elapsed, "ok": ok, "_sid": sid}
-            print(f"\033[32m{fmt(tokens['input'])}t\033[0m {elapsed:.0f}s" if ok else f"\033[33m?t\033[0m {elapsed:.0f}s")
-        except subprocess.TimeoutExpired:
-            results[aid] = {"name": name, "tokens": {"input":0,"output":0}, "time": 0, "ok": False, "_sid": None}
-            print("\033[31mTIMEOUT\033[0m")
-        except Exception as e:
-            results[aid] = {"name": name, "tokens": {"input":0,"output":0}, "time": 0, "ok": False, "_sid": None}
-            print(f"\033[31mERR {e}\033[0m")
-        time.sleep(3)
-
-    for aid in AGENTS:
-        r = results.get(aid, {})
-        if not r.get("ok") and r.get("_sid"):
-            tokens = read_tokens(aid, session_id=r["_sid"])
-            if tokens["input"] > 0:
-                results[aid]["tokens"] = tokens; results[aid]["ok"] = True
-                print(f"  \033[33mrecovered {aid} {tokens['input']:,}t\033[0m")
-
-    print("\n  Agent                  Input     Output      Cost  Overhead")
-    print("  " + "-" * 66)
-    cd = results.get("collar", {}).get("tokens", {})
-    ct = cd.get("input", 0) + cd.get("output", 0)
-
-    for i, aid in enumerate(AGENTS):
-        r = results.get(aid, {})
-        tok = r.get("tokens", {})
-        inp, out = tok.get("input", 0), tok.get("output", 0)
-        c = cost(inp, out, args.model)
-        oh = f"{inp//task_tokens}x" if task_tokens and inp else "-"
-        if inp == 0:
-            print(f"  {COLORS[i]}{r['name']:<22s}  {'N/A':>8s}  {'N/A':>8s}  {'N/A':>7s}  {'N/A':>7s}\033[0m")
-        else:
-            print(f"  {COLORS[i]}{r['name']:<22s}  {fmt(inp):>8s}  {fmt(out):>8s}  ${c:>6.4f}  {oh:>8s}\033[0m")
-    print()
-
-    if ct > 0:
-        for aid in AGENTS:
-            if aid == "collar": continue
-            r = results.get(aid, {})
-            tt = r.get("tokens", {}).get("input", 0) + r.get("tokens", {}).get("output", 0)
-            if tt > 0:
-                saved = tt - ct
-                pct = abs(saved) / max(ct, tt) * 100
-                if saved > 0:
-                    print(f"  \033[1;32mcollar+DAG saved {fmt(saved)}t ({pct:.0f}%) vs {r['name']}\033[0m")
-                elif saved < 0:
-                    print(f"  \033[1;31mcollar+DAG used {fmt(-saved)}t more ({pct:.0f}%) vs {r['name']}\033[0m")
+    # ── Run all tests ──
+    all_results = {}
+    for aid, (name, cmd_tpl, cwd) in AGENTS.items():
+        print(f"  \033[1m{COLORS.get(aid,'')}{name}\033[0m")
+        agent_data = {}
+        for test in TESTS:
+            tid = test["id"]
+            runs = []
+            for rn in range(1, args.runs + 1):
+                inp, out, passed, elapsed, answer = run_test(aid, name, cmd_tpl, cwd, test)
+                runs.append((inp, out, passed, elapsed))
+                status = "\033[32m✓\033[0m" if passed else "\033[31m✗\033[0m"
+                print(f"    {tid} run {rn}/{args.runs}  {status} {fmt(inp)}t/{fmt(out)}t {elapsed:.0f}s")
+                time.sleep(2)
+            agent_data[tid] = runs
+        all_results[aid] = agent_data
         print()
 
-    agents_out = []; collar_total = 0
-    for aid in AGENTS:
-        r = results.get(aid, {})
-        t = r.get("tokens", {})
-        total = t["input"] + t["output"]
-        agents_out.append({"id": aid, "name": r["name"], "input": t["input"], "output": t["output"],
-            "total": total, "time": round(r.get("time", 0), 1),
-            "cost": round(cost(t["input"], t["output"], args.model), 6)})
-        if aid == "collar": collar_total = total
+    # ── Summary ──
+    print(f"  {'Agent':<20s} {'Test':<10s} {'Pass':>5s} {'Min In':>10s} {'Avg Total':>10s} {'Cost':>8s}")
+    print("  " + "-" * 70)
 
-    run = {"timestamp": ts, "model": args.model, "task_tokens": task_tokens,
-           "agents": agents_out, "collar_total": collar_total}
+    summary = {}
+    for aid, (name, _, _) in AGENTS.items():
+        agent_total = 0
+        agent_passed = 0
+        agent_tests = 0
+        for tid in TESTS:
+            tid_short = tid["id"]
+            runs = all_results[aid][tid_short]
+            passed_runs = [r for r in runs if r[2]]
+            all_total = [r[0]+r[1] for r in passed_runs] if passed_runs else [r[0]+r[1] for r in runs if r[0] > 0]
+            if all_total:
+                min_in = min(r[0] for r in runs if r[0] > 0)
+                avg_total = statistics.mean(all_total)
+                avg_cost = cost(statistics.mean([r[0] for r in runs if r[0] > 0]), statistics.mean([r[1] for r in runs if r[0] > 0]), args.model)
+                agent_total += avg_total
+            else:
+                min_in = 0; avg_total = 0; avg_cost = 0
 
+            pass_rate = len(passed_runs)
+            agent_passed += pass_rate
+            agent_tests += args.runs
+
+            color = COLORS.get(aid, "")
+            print(f"  {color}{name:<20s} {tid_short:<10s} {pass_rate:>4d}/{args.runs:<3d} {fmt(int(min_in)):>10s} {fmt(int(avg_total)):>10s} ${avg_cost:>7.4f}\033[0m")
+
+        summary[aid] = {"name": name, "passed": agent_passed, "tests": agent_tests, "avg_total": round(agent_total / len(TESTS)) if agent_total else 0}
+
+    print()
+    print(f"  {'Agent':<20s} {'Pass Rate':>10s} {'Avg Tokens':>12s}")
+    print("  " + "-" * 45)
+    for aid, (name, _, _) in AGENTS.items():
+        s = summary[aid]
+        rate = f"{s['passed']}/{s['tests']}" if s['tests'] else "N/A"
+        pct = f" ({round(s['passed']/s['tests']*100)}%)" if s['tests'] else ""
+        print(f"  {COLORS.get(aid,'')}{name:<20s} {rate:>10s}{pct:<7s} {fmt(s['avg_total']):>12s}\033[0m")
+
+    # JSON
+    ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    run_data = {"timestamp": ts, "model": args.model, "runs_per_test": args.runs,
+                "tests": [t["id"] for t in TESTS],
+                "results": {}}
+    for aid, name, _, _ in [(a, n, _, _) for a, (n, _, _) in AGENTS.items()]:
+        s = summary[aid]
+        run_data["results"][aid] = {"name": name, "passed": s["passed"], "tests": s["tests"], "avg_tokens": s["avg_total"]}
+    print(json.dumps(run_data, indent=2))
+
+    # Save
     hist_path = SCRIPT_DIR / "results.json"
     history = []
     if hist_path.exists():
@@ -170,25 +201,9 @@ def main():
             history = json.loads(hist_path.read_text())
             if not isinstance(history, list): history = [history]
         except: pass
-    history.append(run)
+    history.append(run_data)
     if len(history) > 20: history = history[-20:]
     hist_path.write_text(json.dumps(history, indent=2))
-    print(json.dumps(run, indent=2))
-
-    if do_submit:
-        branch = f"results/auto-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}"
-        subprocess.run(["git", "checkout", "-b", branch], cwd=SCRIPT_DIR, capture_output=True)
-        subprocess.run(["git", "add", "results.json"], cwd=SCRIPT_DIR, capture_output=True)
-        subprocess.run(["git", "commit", "-m", f"chore: auto-submit {ts}"], cwd=SCRIPT_DIR, capture_output=True)
-        r = subprocess.run(["git", "push", "origin", branch], cwd=SCRIPT_DIR, capture_output=True, text=True)
-        if r.returncode == 0:
-            pr = subprocess.run(["gh", "pr", "create", "--repo", "specdog/dogbench", "--head", branch,
-                  "--base", "main", "--title", f"chore: auto-submit {ts}",
-                  "--body", f"```json\n{json.dumps(run, indent=2)}\n```"],
-                  cwd=SCRIPT_DIR, capture_output=True, text=True)
-            print(f"\n  \033[32m{pr.stdout.strip()}\033[0m")
-        else:
-            print(f"\n  \033[33mpush failed\033[0m")
 
 if __name__ == "__main__":
     main()
