@@ -1,4 +1,4 @@
 {
-  "id": "dotdog-calc",
-  "task": "In the sample project: what functions does calc.py export and what does each do? Answer concisely."
+  "id": "dotdog",
+  "task": "Read README.md and implement group_anagrams in solution.py. Make all tests pass."
 }

@@ -82,16 +82,17 @@ def run_test(aid, name, cmd_tpl, cwd, test):
                 sid = line.split("Session:")[-1].strip().split()[0]
                 break
         inp, out = read_tokens(aid, sid)
-        answer = get_answer(aid, sid) if sid else ""
-        passed = test["verify"](answer) if answer else False
-        return (inp, out, passed, answer[:200])
-    except: return (0, 0, False, "")
+        # Grade: run grader.py in the test cwd
+        grader = SCRIPT_DIR / "tests" / "grader.py"
+        gr = subprocess.run([sys.executable, str(grader), str(cwd)], capture_output=True, timeout=30)
+        passed = json.loads(gr.stdout).get("passed", False) if gr.returncode == 0 else False
+        return (inp, out, passed)
+    except: return (0, 0, False)
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--model", default=detect_model())
-    p.add_argument("--submit", action="store_true", default=True)
-    p.add_argument("--no-submit", dest="submit", action="store_false")
+    p.add_argument("--submit", action="store_true")
     args = p.parse_args()
 
     tests = load_tests()
@@ -112,9 +113,10 @@ def main():
         for test in tests:
             tid = test["id"]
             test_cwd = test["cwd"]
-            inp, out, _, _ = run_test(aid, name, cmd_tpl, test_cwd, test)
-            agent_runs[tid] = {"input": inp, "output": out}
-            print(f"  {color}{name:<20s} {tid:<10s} {fmt(inp)}t/{fmt(out)}t\033[0m")
+            inp, out, passed = run_test(aid, name, cmd_tpl, test_cwd, test)
+            agent_runs[tid] = {"input": inp, "output": out, "passed": passed}
+            status = "\033[32m✓\033[0m" if passed else "\033[31m✗\033[0m"
+            print(f"  {color}{name:<20s} {tid:<10s} {status} {fmt(inp)}t/{fmt(out)}t\033[0m")
             time.sleep(2)
         results[aid] = agent_runs
 

@@ -1,0 +1,5 @@
+[problem]
+Desc→ Group anagrams from a list of strings.(11)
+Input→ List of strings.(11), Output→ List of lists grouped by anagram(11)
+Function→ group_anagrams(words)(11)
+Example→ ["eat","tea","tan"] → [["eat","tea"],["tan"]](11)

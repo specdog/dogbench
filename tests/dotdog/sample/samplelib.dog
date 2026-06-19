@@ -1,9 +1,0 @@
-[samplelib]
-Desc→ Tiny library with math and string utilities plus TypeScript API client.(11)
-[functions]
-math.fib→ Returns:nth_fibonacci(11), Params:n(11), Algo:iterative(11)
-math.is_prime→ Returns:bool(11), Params:n(11), Algo:trial_division(11)
-string.slugify→ Returns:kebab_case_string(11), Params:text(11)
-string.truncate→ Returns:truncated_string(11), Params:text,n(11)
-api.fetchUser→ Returns:Promise_User(11), Method:GET(11), Route:/users/:id(11)
-api.createUser→ Returns:Promise_User(11), Method:POST(11), Route:/users(11)

@@ -1,8 +1,0 @@
-[calc]
-Desc→ Simple calculator library. Four arithmetic functions.(11)
-Usage→ from calc import add, subtract, multiply, divide(11)
-[functions]
-add→ Returns:sum(11), Params:a,b(11)
-subtract→ Returns:difference(11), Params:a,b(11)
-multiply→ Returns:product(11), Params:a,b(11)
-divide→ Returns:quotient(11), Params:a,b(11), Error:ZeroDivisionError(11)
