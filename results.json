@@ -1,1 +1,33 @@
-[]
+[
+  {
+    "timestamp": "2026-06-19T00:53:14Z",
+    "commit": "6b2510c",
+    "model": "deepseek-v4-pro",
+    "task_tokens": 41,
+    "agents": [
+      {
+        "agent_id": "collar",
+        "name": "collar + dotdog (DAG)",
+        "input": 0,
+        "output": 0,
+        "total": 0,
+        "time": 25.7,
+        "cost": 0.0,
+        "estimated": false
+      },
+      {
+        "agent_id": "hermes",
+        "name": "hermes (no DAG)",
+        "input": 5083,
+        "output": 816,
+        "total": 5899,
+        "time": 16.2,
+        "cost": 0.004174,
+        "estimated": false
+      }
+    ],
+    "collar": {
+      "total_tokens": 0
+    }
+  }
+]
