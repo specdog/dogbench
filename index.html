@@ -3,61 +3,56 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>dogbench — collars vs hermes</title>
+<title>dogbench — .dag benchmark</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:720px;margin:40px auto;padding:0 20px;background:#111;color:#eee}
-  h1{color:#4ade80;margin-bottom:4px}h2{margin:24px 0 12px;color:#e2e8f0}
+  h1{color:#4ade80;margin-bottom:4px}h2{margin:24px 0 12px;color:#e2e8f0}h3{color:#e2e8f0;margin:0 0 8px}
   .muted{color:#64748b;font-size:.85em}a{color:#60a5fa;text-decoration:none}
   table{width:100%;border-collapse:collapse;margin:12px 0}
   th,td{padding:10px 14px;text-align:center;border-bottom:1px solid #1e293b;font-size:.92em}
   th{color:#64748b;font-weight:600;font-size:.8em;text-transform:uppercase}
   td:first-child,th:first-child{text-align:left}
-  .green{color:#4ade80}.red{color:#ef4444}.yellow{color:#f59e0b}
+  .green{color:#4ade80}.red{color:#ef4444}
   .pass-bar{background:#1e293b;border-radius:3px;height:5px;margin-top:4px;display:inline-block;width:80px;vertical-align:middle}
   .pass-fill{height:100%;border-radius:3px}
+  .card{background:#1a1a2e;border-radius:8px;padding:16px 20px;margin:12px 0}
+  pre{background:#0f172a;padding:12px;border-radius:6px;margin:0;overflow-x:auto}
+  code{color:#fbbf24;font-size:14px}
   footer{margin-top:60px;padding:20px 0;border-top:1px solid #1e293b;color:#475569;font-size:13px}
   footer a{color:#475569}
 </style>
 </head>
 <body>
-<h1>🐕 dogbench v2</h1>
+<h1>🐕 dogbench</h1>
 <p class="muted"><a href="https://github.com/specdog/dogbench">github.com/specdog/dogbench</a></p>
 
-<h2>Test Suite Results</h2>
+<h2>Results</h2>
 <table id="summary">
-  <tr><th>Agent</th><th>Pass Rate</th><th>Avg Tokens</th><th>Cheapest</th></tr>
+  <tr><th>Agent</th><th>Pass</th><th>Tokens</th></tr>
 </table>
-
-<h2>Test Breakdown</h2>
-<table id="breakdown">
-  <tr><th>Agent</th><th>Test</th><th>Pass</th><th>Min Input</th><th>Avg Total</th><th>Cost</th></tr>
-</table>
-
 <p id="meta" class="muted"></p>
 
 <h2>Guide</h2>
-<div class="card" style="background:#1a1a2e;border-radius:8px;padding:16px 20px;margin:12px 0">
-<h3 style="margin:0 0 8px;color:#e2e8f0">Run on your machine</h3>
-<pre style="background:#0f172a;padding:12px;border-radius:6px;margin:0"><code>cd ~/dogbench && git pull origin main && ./dogbench</code></pre>
-<p class="muted">4 agents tested: hermes, hermes+dotdog, collar, collar+dotdog</p>
+<div class="card">
+<h3>Run benchmark</h3>
+<pre><code>cd ~/dogbench && git pull origin main && ./dogbench</code></pre>
+<p class="muted">4 agents: hermes, hermes+dotdog, collar, collar+dotdog</p>
 </div>
-
-<div class="card" style="background:#1a1a2e;border-radius:8px;padding:16px 20px;margin:12px 0">
-<h3 style="margin:0 0 8px;color:#e2e8f0">Single agent test</h3>
-<pre style="background:#0f172a;padding:12px;border-radius:6px;margin:0"><code>hermes chat -q "What npm package name and version does this project's package.json declare? Answer with just: name version"</code></pre>
+<div class="card">
+<h3>Single agent</h3>
+<pre><code>hermes chat -q "What npm package name and version does this project's package.json declare? Answer with just: name version"</code></pre>
 </div>
-
-<div class="card" style="background:#1a1a2e;border-radius:8px;padding:16px 20px;margin:12px 0">
-<h3 style="margin:0 0 8px;color:#e2e8f0">Add tests</h3>
-<p class="muted">Drop <code>.json</code> files in <a href="https://github.com/specdog/dogbench/tree/main/tests">tests/</a> with <code>id</code>, <code>task</code>, and comma-separated <code>ground</code> keywords.</p>
+<div class="card">
+<h3>Add tests</h3>
+<p class="muted">Drop <code>.json</code> files in <a href="https://github.com/specdog/dogbench/tree/main/tests">tests/</a> with <code>id</code>, <code>task</code>, <code>ground</code>.</p>
 </div>
 
 <footer>
-  <a href="https://github.com/specdog">specdog</a> · 
-  <a href="https://github.com/specdog/dotdog">dotdog</a> · 
-  <a href="https://github.com/specdog/collar">collar</a> · 
-  <a href="https://github.com/specdog/leash">leash</a> · 
+  <a href="https://github.com/specdog">specdog</a> ·
+  <a href="https://github.com/specdog/dotdog">dotdog</a> ·
+  <a href="https://github.com/specdog/collar">collar</a> ·
+  <a href="https://github.com/specdog/leash">leash</a> ·
   <a href="https://github.com/specdog/dogbench">dogbench</a>
   <span style="float:right">v0.2.0 · <a href="https://github.com/specdog/dogbench/blob/main/LICENSE">MIT</a></span>
 </footer>
@@ -67,36 +62,33 @@ function fmt(n){return n.toLocaleString()}
 fetch('results.json').then(function(r){return r.json()}).then(function(data){
   var runs=Array.isArray(data)?data:[data];
   var latest=runs[runs.length-1];
-  if(!latest.results){document.getElementById('summary').innerHTML='<tr><td colspan=4>Waiting for v2 results…</td></tr>';return}
-
+  if(!latest.results){document.getElementById('summary').innerHTML='<tr><td colspan=3>No v2 data yet</td></tr>';return}
   var results=latest.results;
   var agents=Object.keys(results);
-  
-  // Find cheapest
+
+  // Cheapest among PASSING agents
   var cheapest=null;
   agents.forEach(function(a){
-    if(!cheapest||results[a].avg_tokens<cheapest.tokens) cheapest={id:a,tokens:results[a].avg_tokens};
+    var r=results[a];
+    if(r.passed>0&&(!cheapest||r.avg_tokens<cheapest.tokens)) cheapest={id:a,tokens:r.avg_tokens};
   });
 
-  // Summary table
   var sum=document.getElementById('summary');
   agents.forEach(function(a){
     var r=results[a];
     var pct=r.tests?Math.round(r.passed/r.tests*100):0;
     var isBest=cheapest&&a===cheapest.id;
+    var passColor=pct>66?'#4ade80':pct>0?'#f59e0b':'#ef4444';
     var row=sum.insertRow();
     row.innerHTML='<td>'+r.name+(isBest?' ✅':'')+'</td>'+
-      '<td>'+r.passed+'/'+r.tests+' ('+pct+'%)'+
-      '<div class="pass-bar"><div class="pass-fill" style="width:'+pct+'%;background:'+(pct>66?'#4ade80':pct>33?'#f59e0b':'#ef4444')+'"></div></div></td>'+
-      '<td>'+fmt(r.avg_tokens)+'t</td>'+
-      '<td>'+(isBest?'✅':'')+'</td>';
+      '<td><span style="color:'+passColor+'">'+r.passed+'/'+r.tests+'</span>'+
+      '<div class="pass-bar"><div class="pass-fill" style="width:'+pct+'%;background:'+passColor+'"></div></div></td>'+
+      '<td>'+fmt(r.avg_tokens)+'t</td>';
   });
-
   document.getElementById('meta').textContent=
-    runs.length+' run(s) · '+(latest.timestamp||'').slice(0,16)+' · '+latest.model+' · '+
-    agents.length+' agents · '+(latest.tests||[]).length+' tests · '+latest.runs_per_test+' runs/test';
+    runs.length+' run(s) · '+(latest.timestamp||'').slice(0,16)+' · '+latest.model;
 }).catch(function(){
-  document.getElementById('summary').innerHTML='<tr><td colspan=4>No data. Run <code>./dogbench</code></td></tr>';
+  document.getElementById('summary').innerHTML='<tr><td colspan=3>No data. Run <code>./dogbench</code></td></tr>';
 });
 </script>
 </body>
