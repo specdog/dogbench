@@ -1,0 +1,6 @@
+{
+  "id": "structure",
+  "task": "What are the main entities/components of this project? List each one with a brief description of what it does. Write your answer to answer.txt. Format: one per line, 'name: description'.",
+  "ground": ["dogbench", "benchmark", "agents", "telemetry", "deps"],
+  "blind": true
+}
