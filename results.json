@@ -1,16 +1,59 @@
-{
-  "model": "deepseek-v4-pro",
-  "agents": [
-    {
-      "name": "collar (DAG-first)",
-      "input": 43698,
-      "output": 734,
-      "total": 44432,
-      "time": 18.40237021446228,
-      "cost": 0.023317
+[
+  {
+    "model": "deepseek-v4-pro",
+    "agents": [
+      {
+        "name": "collar (DAG-first)",
+        "input": 43698,
+        "output": 734,
+        "total": 44432,
+        "time": 18.40237021446228,
+        "cost": 0.023317
+      }
+    ],
+    "collar": {
+      "total_tokens": 44432
     }
-  ],
-  "collar": {
-    "total_tokens": 44432
+  },
+  {
+    "timestamp": "2026-06-19T00:05:02Z",
+    "commit": "58446fd",
+    "model": "deepseek-v4-pro",
+    "task_tokens": 41,
+    "agents": [
+      {
+        "agent_id": "collar",
+        "name": "collar + dotdog (DAG-first)",
+        "input": 24164,
+        "output": 1102,
+        "total": 25266,
+        "time": 22.8,
+        "cost": 0.014286,
+        "estimated": false
+      },
+      {
+        "agent_id": "hermes",
+        "name": "hermes (upstream, no DAG)",
+        "input": 26498,
+        "output": 1504,
+        "total": 28002,
+        "time": 25.1,
+        "cost": 0.016257,
+        "estimated": false
+      },
+      {
+        "agent_id": "api",
+        "name": "DeepSeek API (raw, no tools) (est.)",
+        "input": 41,
+        "output": 82,
+        "total": 123,
+        "time": 0.0,
+        "cost": 0.000185,
+        "estimated": true
+      }
+    ],
+    "collar": {
+      "total_tokens": 25266
+    }
   }
-}
+]
