@@ -17,16 +17,13 @@ COLORS = {"hermes": "\033[36m", "hermes_dag": "\033[35m", "collar": "\033[33m", 
 RATES = {"deepseek-v4-pro": {"input": 0.50, "output": 2.00}, "default": {"input": 1.00, "output": 5.00}}
 
 def load_tests():
-    tests_dir = SCRIPT_DIR / "tests"
     tests = []
-    for f in sorted(tests_dir.glob("*.json")):
-        t = json.loads(f.read_text())
-        tests.append({
-            "id": t["id"],
-            "task": t["task"],
-            "verify": lambda answer, ground=t["ground"]: all(k in answer.lower() for k in ground.split(", ")),
-            "ground": t["ground"],
-        })
+    for subdir in sorted((SCRIPT_DIR / "tests").iterdir()):
+        if not subdir.is_dir(): continue
+        tf = subdir / "test.json"
+        if tf.exists():
+            t = json.loads(tf.read_text())
+            tests.append({"id": t["id"], "task": t["task"], "cwd": str(subdir / "sample")})
     return tests
 
 def detect_model():
