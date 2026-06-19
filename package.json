@@ -1,4 +1,10 @@
 {
+  "name": "dogbench",
+  "version": "0.2.0",
+  "description": "Real token benchmarks for AI coding agents — collar vs hermes vs raw API",
+  "license": "MIT",
+  "author": "specdog",
+  "repository": "github:specdog/dogbench",
   "dependencies": {
     "dotdog": "^0.8.4"
   }
