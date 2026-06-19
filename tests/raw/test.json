@@ -1,5 +1,0 @@
-{
-  "id": "raw",
-  "task": "Implement a function `group_anagrams(words)` in solution.py that takes a list of strings and groups anagrams together. Example: [\"eat\",\"tea\",\"tan\"] → [[\"eat\",\"tea\"],[\"tan\"]]. Make sure your solution works correctly.",
-  "blind": true
-}

@@ -1,6 +1,0 @@
-{
-  "id": "dotdog",
-  "task": "Query the project's .dag spec using dotdog MCP tools to answer: What entities does the dogbench project define? List each entity name and type. Write your answer to answer.txt in the current directory. Format: one entity per line, 'name:type'.",
-  "ground": ["dogbench:entity", "agents:entity", "benchmark:entity", "telemetry:entity", "deps:entity"],
-  "blind": true
-}

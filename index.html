@@ -6,9 +6,12 @@
 <title>dogbench — token benchmark</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:640px;margin:40px auto;padding:0 20px;background:#111;color:#eee}
-  h1{color:#4ade80;margin-bottom:4px}h2{margin:24px 0 12px;color:#e2e8f0}h3{color:#e2e8f0;margin:0 0 8px}
-  .muted{color:#64748b;font-size:.85em}a{color:#60a5fa;text-decoration:none}
+  body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:720px;margin:40px auto;padding:0 20px;background:#111;color:#eee}
+  h1{color:#4ade80;margin-bottom:4px}
+  h2{margin:24px 0 12px;color:#e2e8f0}
+  h3{color:#e2e8f0;margin:0 0 8px}
+  .muted{color:#64748b;font-size:.85em}
+  a{color:#60a5fa;text-decoration:none}
   table{width:100%;border-collapse:collapse;margin:12px 0}
   th,td{padding:8px 12px;text-align:right;border-bottom:1px solid #1e293b;font-size:.92em}
   th{color:#64748b;font-weight:600;font-size:.8em;text-transform:uppercase}
@@ -20,28 +23,30 @@
   footer a{color:#475569}
   .bar{background:#1e293b;border-radius:3px;height:4px;margin-top:3px}
   .bar-inner{height:100%;border-radius:3px}
+  .section{margin:24px 0}
+  .section-title{color:#4ade80;font-size:1.1em;font-weight:600;margin:16px 0 8px}
+  .pass{color:#4ade80}.fail{color:#ef4444}
 </style>
 </head>
 <body>
 <h1>🐕 dogbench</h1>
 <p class="muted"><a href="https://github.com/specdog/dogbench">github.com/specdog/dogbench</a></p>
 
-<h2>Token Benchmark <span id="meta" class="muted" style="font-weight:400"></span></h2>
-<table id="results">
-  <tr><th>Agent</th><th>Tokens</th><th>Cost</th><th>Correct</th></tr>
-</table>
+<div id="meta" class="muted"></div>
+
+<div id="results"></div>
 
 <div class="card">
 <h3>Run</h3>
-<pre><code>cd ~/dogbench && git pull origin main && ./dogbench</code></pre>
+<pre><code>cd ~/dogbench && git pull origin main && go build -o dogbench . && ./dogbench</code></pre>
 </div>
 <div class="card">
-<h3>Single agent</h3>
-<pre><code>hermes chat -q "What npm package name and version does this project's package.json declare? Answer: name version"</code></pre>
+<h3>Terminal Bench</h3>
+<pre><code>./dogbench --terminal</code></pre>
 </div>
 <div class="card">
 <h3>Tests</h3>
-<p class="muted">Add <code>.json</code> files to <a href="https://github.com/specdog/dogbench/tree/main/tests">tests/</a>. Fields: <code>id</code>, <code>task</code>, <code>ground</code> (comma-separated keywords).</p>
+<p class="muted">Add <code>.json</code> files to <a href="https://github.com/specdog/dogbench/tree/main/tests">tests/</a>. Fields: <code>id</code>, <code>task</code>, <code>ground</code>.</p>
 </div>
 
 <footer>
@@ -50,57 +55,83 @@
   <a href="https://github.com/specdog/collar">collar</a> · 
   <a href="https://github.com/specdog/leash">leash</a> · 
   <a href="https://github.com/specdog/dogbench">dogbench</a>
-  <span style="float:right">v0.2.0 · <a href="https://github.com/specdog/dogbench/blob/main/LICENSE">MIT</a></span>
+  <span style="float:right">v0.4.0 · <a href="https://github.com/specdog/dogbench/blob/main/LICENSE">MIT</a></span>
 </footer>
 
 <script>
-function fmt(n){return n.toLocaleString()}
-fetch('results.json').then(function(r){return r.json()}).then(function(data){
-  var runs=Array.isArray(data)?data:[data];
-  var latest=runs[runs.length-1];
-  if(!latest.results){document.getElementById('results').innerHTML='<tr><td colspan=4>No data</td></tr>';return}
+function fmt(n){return n?n.toLocaleString():"N/A"}
 
-  var res=latest.results;
-  var agents=Object.keys(res);
+fetch('results.json').then(r=>r.json()).then(data=>{
+  var runs = Array.isArray(data)?data:[data];
+  var latest = runs[runs.length-1];
+  if(!latest || !latest.runs){document.getElementById('results').innerHTML='<p>No data</p>';return}
 
-  // Find cheapest among all
-  var cheapest=null;
-  agents.forEach(function(a){
-    if(!cheapest||res[a].avg_tokens<cheapest.t) cheapest={id:a,t:res[a].avg_tokens};
-  });
-  var maxT=0;
-  agents.forEach(function(a){if(res[a].avg_tokens>maxT)maxT=res[a].avg_tokens});
+  var allRuns = latest.runs; // key: "agentID:testID"
+  var model = latest.model || 'unknown';
+  var ts = latest.timestamp || '';
+  document.getElementById('meta').textContent = ts.slice(0,16) + ' · ' + model;
 
-  var tbl=document.getElementById('results');
-  agents.forEach(function(a){
-    var r=res[a];
-    var isBest=cheapest&&a===cheapest.id;
-    var pct=maxT?Math.round(r.avg_tokens/maxT*100):0;
-    var color=isBest?'#4ade80':pct>75?'#ef4444':'#475569';
-    var passed=r.passed>0;
-    var row=tbl.insertRow();
-    row.innerHTML='<td>'+(isBest?'✅ ':'')+r.name+'</td>'+
-      '<td>'+fmt(r.avg_tokens)+'t<div class="bar"><div class="bar-inner" style="width:'+pct+'%;background:'+color+'"></div></div></td>'+
-      '<td>$'+'…'+'</td>'+
-      '<td>'+(passed?'✓':'✗')+'</td>';
+  // Group by test ID
+  var tests = {};
+  var agents = new Set();
+  Object.keys(allRuns).forEach(key=>{
+    var parts = key.split(':');
+    var agentID = parts[0];
+    var testID = parts[1];
+    agents.add(agentID);
+    if(!tests[testID]) tests[testID] = {};
+    tests[testID][agentID] = allRuns[key];
   });
 
-  // Add cost column properly
-  var rows=tbl.querySelectorAll('tr');
-  agents.forEach(function(a,i){
-    var r=res[a];
-    // Estimate cost from model rates
-    var costPerM={input:0.50,output:2.00};
-    var estIn=r.avg_tokens*0.85;
-    var estOut=r.avg_tokens*0.15;
-    var estCost=(estIn/1e6)*costPerM.input+(estOut/1e6)*costPerM.output;
-    rows[i+1].cells[2].innerHTML='$'+estCost.toFixed(6);
+  var agentOrder = ['hermes','hermes_dag','collar','collar_dag'];
+  var agentNames = {
+    'hermes': 'hermes',
+    'hermes_dag': 'hermes + dotdog',
+    'collar': 'collar',
+    'collar_dag': 'collar + dotdog'
+  };
+  var agentColors = {
+    'hermes': '#22d3ee',
+    'hermes_dag': '#d946ef',
+    'collar': '#facc15',
+    'collar_dag': '#4ade80'
+  };
+
+  var html = '';
+  Object.keys(tests).sort().forEach(testID=>{
+    html += '<div class="section">';
+    html += '<div class="section-title">' + testID.toUpperCase() + '</div>';
+    html += '<table><tr><th>Agent</th><th>Pass</th><th>Input</th><th>Output</th><th>Total</th><th>Cost</th><th>Bar</th></tr>';
+
+    var testRuns = tests[testID];
+    var maxTotal = 0;
+    agentOrder.forEach(a=>{
+      if(testRuns[a] && testRuns[a].input + testRuns[a].output > maxTotal)
+        maxTotal = testRuns[a].input + testRuns[a].output;
+    });
+
+    agentOrder.forEach(a=>{
+      var r = testRuns[a];
+      if(!r) return;
+      var total = r.input + r.output;
+      var pct = maxTotal ? Math.round(total/maxTotal*100) : 0;
+      var color = r.passed ? '#4ade80' : '#ef4444';
+      var barColor = pct > 75 ? '#ef4444' : pct > 50 ? '#f59e0b' : '#4ade80';
+      var cost = ((r.input/1e6)*0.50 + (r.output/1e6)*2.00).toFixed(6);
+      html += '<tr>';
+      html += '<td style="color:'+agentColors[a]+'">' + (agentNames[a]||a) + '</td>';
+      html += '<td class="' + (r.passed?'pass':'fail') + '">' + (r.passed?'✓':'✗') + '</td>';
+      html += '<td>' + fmt(r.input) + '</td>';
+      html += '<td>' + fmt(r.output) + '</td>';
+      html += '<td>' + fmt(total) + '</td>';
+      html += '<td>$' + cost + '</td>';
+      html += '<td><div class="bar"><div class="bar-inner" style="width:'+pct+'%;background:'+barColor+'"></div></div></td>';
+      html += '</tr>';
+    });
+    html += '</table></div>';
   });
 
-  document.getElementById('meta').textContent=
-    (latest.timestamp||'').slice(0,16)+' · '+latest.model+' · '+(latest.tests||[]).length+' test(s)';
-}).catch(function(){
-  document.getElementById('results').innerHTML='<tr><td colspan=4>No data. Run <code>./dogbench</code></td></tr>';
+  document.getElementById('results').innerHTML = html;
 });
 </script>
 </body>

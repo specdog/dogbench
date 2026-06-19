@@ -1,0 +1,6 @@
+{
+  "id": "math",
+  "task": "Solve this math problem: A train leaves station A at 60 mph. Another leaves station B at 40 mph towards A. Distance between A and B is 300 miles. When and where do they meet? Show your work and give the answer in the format: 'They meet X hours after departure, Y miles from station A.' Write your answer to answer.txt.",
+  "ground": ["3 hours", "180 miles"],
+  "blind": true
+}

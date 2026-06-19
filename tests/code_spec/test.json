@@ -1,0 +1,6 @@
+{
+  "id": "code_spec",
+  "task": "Query the project's .dag spec using dotdog MCP tools to understand the 'benchmark' entity and its properties. Then implement a function `validate_benchmark(data)` in solution.py that takes a dict and returns True if it has all required fields (task, model, agents), False otherwise. Write the function to solution.py in the current directory.",
+  "ground": ["validate_benchmark", "task", "model", "agents"],
+  "blind": true
+}
