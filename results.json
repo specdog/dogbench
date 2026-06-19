@@ -88,5 +88,35 @@
         "avg_tokens": 14850
       }
     }
+  },
+  {
+    "timestamp": "2026-06-19T02:56:43Z",
+    "model": "deepseek-v4-pro",
+    "results": {
+      "hermes": {
+        "name": "hermes",
+        "passed": 0,
+        "tests": 1,
+        "avg_tokens": 1593
+      },
+      "hermes_dag": {
+        "name": "hermes + dotdog",
+        "passed": 1,
+        "tests": 1,
+        "avg_tokens": 16104
+      },
+      "collar": {
+        "name": "collar",
+        "passed": 0,
+        "tests": 1,
+        "avg_tokens": 6790
+      },
+      "collar_dag": {
+        "name": "collar + dotdog",
+        "passed": 1,
+        "tests": 1,
+        "avg_tokens": 14750
+      }
+    }
   }
 ]
