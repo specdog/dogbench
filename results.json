@@ -42,5 +42,49 @@
       }
     ],
     "collar_total": 0
+  },
+  {
+    "timestamp": "2026-06-19T01:58:18Z",
+    "model": "deepseek-v4-pro",
+    "task_tokens": 41,
+    "agents": [
+      {
+        "id": "collar",
+        "name": "collar + dotdog",
+        "input": 4577,
+        "output": 933,
+        "total": 5510,
+        "time": 20.5,
+        "cost": 0.004155
+      },
+      {
+        "id": "collarnodog",
+        "name": "collar (no dotdog)",
+        "input": 0,
+        "output": 0,
+        "total": 0,
+        "time": 24.5,
+        "cost": 0.0
+      },
+      {
+        "id": "hermes_dag",
+        "name": "hermes + dotdog",
+        "input": 25653,
+        "output": 1081,
+        "total": 26734,
+        "time": 23.8,
+        "cost": 0.014988
+      },
+      {
+        "id": "hermes",
+        "name": "hermes (no dotdog)",
+        "input": 5336,
+        "output": 791,
+        "total": 6127,
+        "time": 14.7,
+        "cost": 0.00425
+      }
+    ],
+    "collar_total": 5510
   }
 ]
