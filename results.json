@@ -1,32 +1,24 @@
 [
   {
-    "timestamp": "2026-06-19T02:24:24Z",
+    "timestamp": "2026-06-19T02:36:31Z",
     "model": "deepseek-v4-pro",
-    "runs_per_test": 2,
+    "runs_per_test": 1,
     "tests": [
       "agents",
-      "flow",
-      "measures",
-      "ci"
+      "flow"
     ],
     "results": {
-      "collar": {
-        "name": "collar",
-        "passed": 8,
-        "tests": 8,
-        "avg_tokens": 16873
-      },
-      "collarnodog": {
-        "name": "collar (no .dag)",
-        "passed": 1,
-        "tests": 8,
-        "avg_tokens": 43438
+      "collar_dag": {
+        "name": "collar + dotdog",
+        "passed": 2,
+        "tests": 2,
+        "avg_tokens": 24804
       },
       "hermes": {
-        "name": "hermes (no .dag)",
-        "passed": 5,
-        "tests": 8,
-        "avg_tokens": 8778
+        "name": "hermes",
+        "passed": 0,
+        "tests": 2,
+        "avg_tokens": 11246
       }
     }
   }

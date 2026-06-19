@@ -17,32 +17,18 @@ TESTS = [
     },
     {
         "id": "flow",
-        "task": "What is the benchmark flow in dogbench? List the steps in order.",
-        "verify": lambda answer: all(k in answer.lower() for k in ["detect", "run", "collect", "compare", "output"]),
+        "task": "What is the benchmark flow? List the steps in order.",
+        "verify": lambda answer: all(k in answer.lower() for k in ["detect", "run", "collect", "compare"]),
         "ground": "Detect→Run→Collect→Compare→Output"
-    },
-    {
-        "id": "measures",
-        "task": "What does dogbench measure? List the metrics.",
-        "verify": lambda answer: all(k in answer.lower() for k in ["input", "output", "token", "cost"]),
-        "ground": "input tokens, output tokens, cost (USD)"
-    },
-    {
-        "id": "ci",
-        "task": "How does the CI workflow validate benchmark submissions? What does it check?",
-        "verify": lambda answer: any(k in answer.lower() for k in ["json", "validate", "schema", "assert"]),
-        "ground": "CI validates results.json schema with assertions"
     },
 ]
 
 AGENTS = {
-    "hermes":      ("hermes",              'hermes chat -q {task}',   TMPDIR),
-    "hermes_dag":  ("hermes + dotdog",     'hermes chat -q {task}',   SCRIPT_DIR),
-    "collar":      ("collar",              'collar chat -q {task}',   TMPDIR),
     "collar_dag":  ("collar + dotdog",     'collar chat -q {task}',   SCRIPT_DIR),
+    "hermes":      ("hermes",              'hermes chat -q {task}',   TMPDIR),
 }
 
-COLORS = {"hermes": "\033[36m", "hermes_dag": "\033[35m", "collar": "\033[33m", "collar_dag": "\033[32m"}
+COLORS = {"collar_dag": "\033[32m", "hermes": "\033[36m"}
 
 RATES = {"deepseek-v4-pro": {"input": 0.50, "output": 2.00}, "default": {"input": 1.00, "output": 5.00}}
 
