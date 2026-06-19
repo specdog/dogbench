@@ -1,46 +1,46 @@
 [
   {
-    "timestamp": "2026-06-19T01:30:44Z",
+    "timestamp": "2026-06-19T01:42:17Z",
     "model": "deepseek-v4-pro",
     "task_tokens": 41,
     "agents": [
       {
         "id": "collar",
         "name": "collar + dotdog",
-        "input": 27816,
-        "output": 887,
-        "total": 28703,
-        "time": 19.5,
-        "cost": 0.015682
+        "input": 27712,
+        "output": 871,
+        "total": 28583,
+        "time": 18.9,
+        "cost": 0.015598
       },
       {
         "id": "collarnodog",
         "name": "collar (no dotdog)",
-        "input": 27856,
-        "output": 1088,
-        "total": 28944,
-        "time": 25.0,
-        "cost": 0.016104
+        "input": 8268,
+        "output": 1079,
+        "total": 9347,
+        "time": 23.4,
+        "cost": 0.006292
       },
       {
         "id": "hermes_dag",
         "name": "hermes + dotdog",
-        "input": 28626,
-        "output": 1681,
-        "total": 30307,
-        "time": 29.1,
-        "cost": 0.017675
+        "input": 18209,
+        "output": 1203,
+        "total": 19412,
+        "time": 21.4,
+        "cost": 0.01151
       },
       {
         "id": "hermes",
         "name": "hermes (no dotdog)",
-        "input": 4996,
-        "output": 1039,
-        "total": 6035,
-        "time": 25.5,
-        "cost": 0.004576
+        "input": 14294,
+        "output": 1577,
+        "total": 15871,
+        "time": 32.2,
+        "cost": 0.010301
       }
     ],
-    "collar_total": 28703
+    "collar_total": 28583
   }
 ]
