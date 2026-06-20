@@ -1,6 +1,6 @@
 # dogbench results
 
-Real token benchmarks from real users. Submit yours with `./dogbench --all --json`.
+Real token-savings benchmarks for Collar and dotdog. Submit yours with `./dogbench --json`.
 
 ## Latest Results
 
@@ -10,7 +10,7 @@ Real token benchmarks from real users. Submit yours with `./dogbench --all --jso
 
 ## Submit Your Results
 
-1. Run: `./dogbench --all --json > results.json`
+1. Run: `./dogbench --json > results.json`
 2. Open a PR adding your row to the table above
 3. Include your `results.json`
 
