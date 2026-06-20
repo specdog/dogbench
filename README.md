@@ -64,10 +64,10 @@ cd ~/dogbench && git pull origin main && ~/collar/.venv/bin/pip install -e . && 
 
 ```bash
 # Same harness, different engines — proves DAG savings are architectural
-dogbench --compare claude --model gpt-5
-dogbench --compare codex --model gpt-5
+dogbench --bench savings --model gpt-5
+dogbench --bench savings --model claude-sonnet-4
 
-# Same engine, different harnesses — raw collar vs raw Claude Code
+# Same engine, different harnesses — raw collar vs compact Collar/DAG
 dogbench --compare claude codex --model claude-sonnet-4
 
 # Collar + DeepSeek vs Collar + Codex (same harness, different backends)
@@ -116,7 +116,7 @@ PRs welcome. Any CLI tool that accepts a prompt and writes usage logs can be ben
 
 ```bash
 # Run benchmark
-./dogbench --all --json > results.json
+./dogbench --json > results.json
 
 # Submit via PR (preferred)
 git checkout -b results/yourname
