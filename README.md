@@ -137,3 +137,7 @@ open https://github.com/specdog/dogbench/issues/new
 # Full test (all installed agents)
 ./dogbench --all --json
 ```
+
+## Author
+
+A specdog project by **[Justin DiClemente](https://github.com/logohere)**.
